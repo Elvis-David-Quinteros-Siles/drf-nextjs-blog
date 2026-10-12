@@ -33,7 +33,7 @@ export default function usePostsAuthor({ isOwner }: ComponentProps) {
           setNextUrl(res.next);
         }
       } catch (err) {
-        ToastError('Error fetching author posts');
+        ToastError('No se pudieron cargar tus artículos');
       } finally {
         setLoading(false);
       }
@@ -73,7 +73,7 @@ export default function usePostsAuthor({ isOwner }: ComponentProps) {
           setNextUrl(res.next);
         }
       } catch (e) {
-        ToastError('Error loading more author posts');
+        ToastError('No se pudieron cargar más artículos');
       } finally {
         setLoadingMore(false);
       }
@@ -86,11 +86,11 @@ export default function usePostsAuthor({ isOwner }: ComponentProps) {
       setLoadingDelete(true);
       const res = await deletePost({ slug });
       if (res.status === 200) {
-        ToastSuccess('Post deleted successfully!');
+        ToastSuccess('Artículo eliminado');
         setPosts((prevPosts) => prevPosts.filter((post) => post.slug !== slug));
       }
     } catch (err) {
-      ToastError('Error deleting post');
+      ToastError('No se pudo eliminar el artículo');
     } finally {
       setLoadingDelete(false);
     }

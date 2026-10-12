@@ -1,11 +1,11 @@
-import LoadingMoon from '@/components/loaders/LoadingMoon';
-import { IPostList } from '@/interfaces/blog/IPost';
 import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from '@headlessui/react';
+import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { IPostList } from '@/interfaces/blog/IPost';
 
 interface ComponentProps {
   open: boolean;
-  setOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  post: IPostList;
+  setOpen: (open: boolean) => void;
+  post: IPostList | null;
   handleDelete: (slug: string) => Promise<void>;
   loadingDelete: boolean;
 }
@@ -18,40 +18,51 @@ export default function DeletePostModal({
   loadingDelete,
 }: ComponentProps) {
   return (
-    <Dialog open={open} onClose={setOpen} className="relative z-10">
+    <Dialog open={open} onClose={setOpen} className="relative z-50">
       <DialogBackdrop
         transition
-        className="fixed inset-0 bg-gray-500/75 transition-opacity data-[closed]:opacity-0 data-[enter]:duration-300 data-[leave]:duration-200 data-[enter]:ease-out data-[leave]:ease-in"
+        className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity data-[closed]:opacity-0 dark:bg-black/60"
       />
-
-      <div className="fixed inset-0 z-10 w-screen overflow-y-auto">
-        <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-          <DialogPanel
-            transition
-            className="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all data-[closed]:translate-y-4 data-[closed]:opacity-0 data-[enter]:duration-300 data-[leave]:duration-200 data-[enter]:ease-out data-[leave]:ease-in sm:my-8 sm:w-full sm:max-w-sm sm:p-6 data-[closed]:sm:translate-y-0 data-[closed]:sm:scale-95"
-          >
+      <div className="fixed inset-0 flex items-end justify-center p-4 sm:items-center">
+        <DialogPanel
+          transition
+          className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl transition data-[closed]:translate-y-4 data-[closed]:opacity-0 sm:data-[closed]:translate-y-0 sm:data-[closed]:scale-95 dark:bg-dark-bg dark:ring-1 dark:ring-dark-third"
+        >
+          <div className="flex gap-4">
+            <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
+              <ExclamationTriangleIcon className="size-5" aria-hidden="true" />
+            </span>
             <div>
-              <div className="mt-3 text-center sm:mt-5">
-                <DialogTitle as="h3" className="text-base font-semibold text-gray-900">
-                  Are you sure you want to delete this post?
-                </DialogTitle>
-                <div className="mt-2">
-                  <p className="text-sm text-gray-500">{post?.title}</p>
-                </div>
-              </div>
+              <DialogTitle className="text-base font-semibold text-gray-900 dark:text-white">
+                ¿Eliminar este artículo?
+              </DialogTitle>
+              <p className="mt-1 text-sm text-gray-600 dark:text-dark-txt-secondary">
+                «{post?.title}» se eliminará junto con sus estadísticas. Esta acción no se puede deshacer.
+              </p>
             </div>
-            <div className="mt-5 sm:mt-6">
-              <button
-                type="button"
-                disabled={loadingDelete}
-                onClick={() => handleDelete(post?.slug)}
-                className="inline-flex w-full justify-center rounded-md bg-rose-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-rose-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600"
-              >
-                {loadingDelete ? <LoadingMoon /> : 'Delete'}
-              </button>
-            </div>
-          </DialogPanel>
-        </div>
+          </div>
+          <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="btn border border-gray-300 hover:bg-gray-50 dark:border-dark-third dark:hover:bg-dark-second"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={loadingDelete || !post}
+              onClick={async () => {
+                if (!post) return;
+                await handleDelete(post.slug);
+                setOpen(false);
+              }}
+              className="btn bg-rose-600 text-white hover:bg-rose-500"
+            >
+              {loadingDelete ? 'Eliminando…' : 'Eliminar'}
+            </button>
+          </div>
+        </DialogPanel>
       </div>
     </Dialog>
   );

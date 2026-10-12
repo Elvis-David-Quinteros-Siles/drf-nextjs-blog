@@ -27,7 +27,8 @@ export default function EditTextArea({
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => {
     let inputValue = e.target.value;
 
-    inputValue = inputValue.replace(/[^a-zA-Z0-9\s',:.?-ÁÉÍÓÚáéíóúÑñüÜ]/g, '');
+    // Solo se quitan los signos de etiqueta HTML; el backend vuelve a limpiar el texto
+    inputValue = inputValue.replace(/[<>]/g, '');
 
     setData(inputValue);
   };

@@ -137,7 +137,8 @@ class PostAuthorViews(StandardAPIView):
         title = sanitize_string(request.data.get('title', None))
         description = sanitize_string(request.data.get('description', ""))
         content = sanitize_html(request.data.get('content', None))        
-        post_status = sanitize_string(request.data.get('status', 'draft'))        
+        post_status = request.data.get('status', 'draft')
+        post_status = post_status if post_status in ('draft', 'published') else 'draft'        
 
         # Thumbnail params
         thumbnail_name = request.data.get("thumbnail_name", None)
@@ -219,7 +220,8 @@ class PostAuthorViews(StandardAPIView):
         title = sanitize_string(request.data.get('title', None))
         description = sanitize_string(request.data.get('description', ""))
         content = sanitize_html(request.data.get('content', None))        
-        post_status = sanitize_string(request.data.get('status', 'draft'))   
+        post_status = request.data.get('status', 'draft')
+        post_status = post_status if post_status in ('draft', 'published') else 'draft'   
         keywords = sanitize_string(request.data.get('keywords', ""))
         slug = slugify(request.data.get("slug", None))
         category_slug = slugify(request.data.get("category", None))

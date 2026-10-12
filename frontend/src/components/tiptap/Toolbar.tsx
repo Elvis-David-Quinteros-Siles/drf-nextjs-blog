@@ -1,3 +1,4 @@
+import { useEffect, useReducer } from 'react';
 import {
   Bold,
   Italic,
@@ -9,139 +10,131 @@ import {
   Quote,
   Undo,
   Redo,
-  Code,
+  SquareCode,
+  Link2,
+  Minus,
 } from 'lucide-react';
 import { type Editor } from '@tiptap/react';
 
 interface ComponentProps {
   editor: Editor | null;
-  maxTextLength: number;
+  compact?: boolean;
 }
 
-export default function Toolbar({ editor, maxTextLength }: ComponentProps) {
-  if (!editor) return null;
+interface ToolButtonProps {
+  label: string;
+  shortcut?: string;
+  icon: React.ComponentType<{ className?: string }>;
+  active?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}
 
-  const currentTextLength = editor.getText().length;
+function ToolButton({ label, shortcut, icon: Icon, active, disabled, onClick }: ToolButtonProps) {
+  return (
+    <button
+      type="button"
+      onMouseDown={(e) => e.preventDefault()} // no quitar el foco del editor
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      aria-pressed={active}
+      title={shortcut ? `${label} (${shortcut})` : label}
+      className={`inline-flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors disabled:opacity-30 ${
+        active
+          ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300'
+          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-dark-txt-secondary dark:hover:bg-dark-second dark:hover:text-white'
+      }`}
+    >
+      <Icon className="size-[18px]" />
+    </button>
+  );
+}
+
+ToolButton.defaultProps = {
+  shortcut: '',
+  active: false,
+  disabled: false,
+};
+
+function Divider() {
+  return <span className="mx-1 h-5 w-px shrink-0 bg-gray-200 dark:bg-dark-third" aria-hidden="true" />;
+}
+
+export default function Toolbar({ editor, compact = false }: ComponentProps) {
+  // Re-render con cada transacción para reflejar el estado activo de los botones
+  const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
+  useEffect(() => {
+    if (!editor) return undefined;
+    editor.on('transaction', forceUpdate);
+    return () => {
+      editor.off('transaction', forceUpdate);
+    };
+  }, [editor]);
+
+  if (!editor) {
+    return <div className="h-[53px] border-b border-gray-200 dark:border-dark-third" />;
+  }
+
+  const chain = () => editor.chain().focus();
+
+  const setLink = () => {
+    const previous = editor.getAttributes('link').href as string | undefined;
+    // eslint-disable-next-line no-alert
+    const url = window.prompt('Dirección del enlace (vacío para quitarlo)', previous || 'https://');
+    if (url === null) return;
+    if (url.trim() === '' || url === 'https://') {
+      chain().extendMarkRange('link').unsetLink().run();
+      return;
+    }
+    const href = /^https?:\/\//.test(url) ? url : `https://${url}`;
+    chain().extendMarkRange('link').setLink({ href }).run();
+  };
+
+  const words = editor.getText().split(/\s+/).filter(Boolean).length;
 
   return (
-    <div className="flex w-full items-center justify-between space-x-2">
-      <div className="flex items-center space-x-2">
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            editor.chain().focus().toggleBold().run();
-          }}
-          className={`rounded-xl border p-2 ${editor?.isActive('bold') ? 'bg-gray-100' : 'hover:bg-gray-100'}`}
-          type="button"
-        >
-          <Bold className="h-5 w-auto" />
-        </button>
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            editor.chain().focus().toggleItalic().run();
-          }}
-          className={`rounded-xl border p-2 ${editor?.isActive('italic') ? 'bg-gray-100' : 'hover:bg-gray-100'}`}
-          type="button"
-        >
-          <Italic className="h-5 w-auto" />
-        </button>
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            editor.chain().focus().toggleUnderline().run();
-          }}
-          className={`rounded-xl border p-2 ${editor?.isActive('underline') ? 'bg-gray-100' : 'hover:bg-gray-100'}`}
-          type="button"
-        >
-          <Underline className="h-5 w-auto" />
-        </button>
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            editor.chain().focus().toggleStrike().run();
-          }}
-          className={`rounded-xl border p-2 ${editor?.isActive('strike') ? 'bg-gray-100' : 'hover:bg-gray-100'}`}
-          type="button"
-        >
-          <Strikethrough className="h-5 w-auto" />
-        </button>
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            editor.chain().focus().toggleHeading({ level: 2 }).run();
-          }}
-          className={`rounded-xl border p-2 ${editor?.isActive('heading', { level: 2 }) ? 'bg-gray-100' : 'hover:bg-gray-100'}`}
-          type="button"
-        >
-          <Heading2 className="h-5 w-auto" />
-        </button>
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            editor.chain().focus().toggleBulletList().run();
-          }}
-          className={`rounded-xl border p-2 ${editor?.isActive('bulletList') ? 'bg-gray-100' : 'hover:bg-gray-100'}`}
-          type="button"
-        >
-          <List className="h-5 w-auto" />
-        </button>
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            editor.chain().focus().toggleOrderedList().run();
-          }}
-          className={`rounded-xl border p-2 ${editor?.isActive('orderedList') ? 'bg-gray-100' : 'hover:bg-gray-100'}`}
-          type="button"
-        >
-          <ListOrdered className="h-5 w-auto" />
-        </button>
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            editor.chain().focus().toggleBlockquote().run();
-          }}
-          className={`rounded-xl border p-2 ${editor?.isActive('blockquote') ? 'bg-gray-100' : 'hover:bg-gray-100'}`}
-          type="button"
-        >
-          <Quote className="h-5 w-auto" />
-        </button>
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            editor.chain().focus().setCode().run();
-          }}
-          className={`rounded-xl border p-2 ${editor?.isActive('code') ? 'bg-gray-100' : 'hover:bg-gray-100'}`}
-          type="button"
-        >
-          <Code className="h-5 w-auto" />
-        </button>
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            editor.chain().focus().undo().run();
-          }}
-          className={`rounded-xl border p-2 ${editor?.isActive('undo') ? 'bg-gray-100' : 'hover:bg-gray-100'}`}
-          type="button"
-        >
-          <Undo className="h-5 w-auto" />
-        </button>
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            editor.chain().focus().redo().run();
-          }}
-          className={`rounded-xl border p-2 ${editor?.isActive('redo') ? 'bg-gray-100' : 'hover:bg-gray-100'}`}
-          type="button"
-        >
-          <Redo className="h-5 w-auto" />
-        </button>
+    <div className="sticky top-16 z-10 flex items-center gap-2 rounded-t-xl border-b border-gray-200 bg-white/95 px-2 py-2 backdrop-blur dark:border-dark-third dark:bg-dark-bg/95">
+      <div className="scrollbar-none flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
+        {!compact && (
+          <>
+            <ToolButton
+              label="Título de sección"
+              icon={Heading2}
+              active={editor.isActive('heading', { level: 2 })}
+              onClick={() => chain().toggleHeading({ level: 2 }).run()}
+            />
+            <Divider />
+          </>
+        )}
+        <ToolButton label="Negrita" shortcut="Ctrl+B" icon={Bold} active={editor.isActive('bold')} onClick={() => chain().toggleBold().run()} />
+        <ToolButton label="Cursiva" shortcut="Ctrl+I" icon={Italic} active={editor.isActive('italic')} onClick={() => chain().toggleItalic().run()} />
+        <ToolButton label="Subrayado" shortcut="Ctrl+U" icon={Underline} active={editor.isActive('underline')} onClick={() => chain().toggleUnderline().run()} />
+        <ToolButton label="Tachado" icon={Strikethrough} active={editor.isActive('strike')} onClick={() => chain().toggleStrike().run()} />
+        <ToolButton label="Enlace" shortcut="" icon={Link2} active={editor.isActive('link')} onClick={setLink} />
+        <Divider />
+        <ToolButton label="Lista" icon={List} active={editor.isActive('bulletList')} onClick={() => chain().toggleBulletList().run()} />
+        <ToolButton label="Lista numerada" icon={ListOrdered} active={editor.isActive('orderedList')} onClick={() => chain().toggleOrderedList().run()} />
+        {!compact && (
+          <>
+            <ToolButton label="Cita" icon={Quote} active={editor.isActive('blockquote')} onClick={() => chain().toggleBlockquote().run()} />
+            <ToolButton label="Bloque de código" icon={SquareCode} active={editor.isActive('codeBlock')} onClick={() => chain().toggleCodeBlock().run()} />
+            <ToolButton label="Separador" icon={Minus} onClick={() => chain().setHorizontalRule().run()} />
+          </>
+        )}
+        <Divider />
+        <ToolButton label="Deshacer" shortcut="Ctrl+Z" icon={Undo} disabled={!editor.can().undo()} onClick={() => chain().undo().run()} />
+        <ToolButton label="Rehacer" shortcut="Ctrl+Shift+Z" icon={Redo} disabled={!editor.can().redo()} onClick={() => chain().redo().run()} />
       </div>
-      {maxTextLength && (
-        <span className="ml-auto text-sm text-gray-500">
-          {currentTextLength} of {maxTextLength}
+      {!compact && (
+        <span className="hidden shrink-0 pr-2 text-xs tabular-nums text-gray-500 sm:block dark:text-gray-400">
+          {words} {words === 1 ? 'palabra' : 'palabras'} · {Math.max(1, Math.round(words / 200))} min
         </span>
       )}
     </div>
   );
 }
+
+Toolbar.defaultProps = {
+  compact: false,
+};

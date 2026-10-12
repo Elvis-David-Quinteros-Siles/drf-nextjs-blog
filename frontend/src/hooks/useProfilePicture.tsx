@@ -15,7 +15,7 @@ export default function useProfilePicture() {
         setProfilePicture(res.results);
       }
     } catch (err) {
-      ToastError('Error fetching profile picture');
+      ToastError('No se pudo cargar la foto de perfil');
     } finally {
       setLoading(false);
     }

@@ -1,3 +1,4 @@
+import html
 import re
 from urllib.parse import urlparse
 
@@ -12,20 +13,24 @@ ALLOWED_TAGS = [
 ALLOWED_ATTRIBUTES = {"a": ["href", "title"]}
 ALLOWED_SCHEMES = ['http', 'https']
 
+CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
 def sanitize_string(string):
+    """
+    Limpia texto plano (títulos, descripciones, nombres, mensajes): elimina cualquier
+    etiqueta HTML y los caracteres de control, pero conserva la puntuación normal
+    (paréntesis, signos, barras, comillas...). El frontend lo muestra escapado.
+    """
     if string is None:
         return ""
-    
-    # Sanitizar usando bleach para remover cualquier tag que no deseamos
-    cleaned_string = bleach.clean(string, tags=[], strip=True)
 
-    # Permittir solamente letras, numeros, espacios, apostrofes, comillas, comas y puntos
-    pattern = re.compile(r"[^a-zA-Z0-9\s',:.?-ÁÉÍÓÚáéíóúÑñüÜ]")
+    # Quitar etiquetas HTML; bleach escapa &, < y > como entidades, así que se deshacen
+    # después para guardar el texto tal cual (sin volver a permitir etiquetas)
+    cleaned_string = html.unescape(bleach.clean(str(string), tags=[], strip=True))
+    cleaned_string = cleaned_string.replace("<", "").replace(">", "")
 
-    # Remover caracters indeseados
-    sanitized_string = pattern.sub("", cleaned_string)
-
-    return sanitized_string
+    # Caracteres de control (salvo saltos de línea y tabuladores)
+    return CONTROL_CHARS.sub("", cleaned_string).strip()
 
 def sanitize_html(content):
     if content is None:

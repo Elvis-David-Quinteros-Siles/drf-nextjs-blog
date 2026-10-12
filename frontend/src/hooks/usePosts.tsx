@@ -106,11 +106,11 @@ export default function usePosts({ username, showFeatured, categories, searchBy 
       setLoadingDelete(true);
       const res = await deletePost({ slug });
       if (res.status === 200) {
-        ToastSuccess('Post deleted successfully!');
+        ToastSuccess('Artículo eliminado');
         setPosts((prevPosts) => prevPosts.filter((post) => post.slug !== slug));
       }
     } catch (err) {
-      ToastError('Error deleting post');
+      ToastError('No se pudo eliminar el artículo');
     } finally {
       setLoadingDelete(false);
     }

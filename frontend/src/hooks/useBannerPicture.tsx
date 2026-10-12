@@ -15,7 +15,7 @@ export default function useBannerPicture() {
         setBannerPicture(res.results);
       }
     } catch (err) {
-      ToastError('Error fetching banner picture');
+      ToastError('No se pudo cargar la portada del perfil');
     } finally {
       setLoading(false);
     }

@@ -123,8 +123,14 @@ export default function Navbar() {
                   <p className="truncate text-sm font-semibold">{username}</p>
                 </div>
                 {[
+                  ...(user?.role && user.role !== 'customer'
+                    ? [
+                        { href: '/profile/posts/new', label: 'Escribir artículo' },
+                        { href: '/profile/posts', label: 'Mis artículos' },
+                      ]
+                    : []),
                   { href: `/@/${username}`, label: 'Perfil público' },
-                  { href: '/profile', label: 'Mi cuenta y artículos' },
+                  { href: '/profile', label: 'Configuración' },
                 ].map((item) => (
                   <MenuItem key={item.href}>
                     <Link

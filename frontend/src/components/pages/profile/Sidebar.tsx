@@ -1,65 +1,57 @@
-import {
-  //   BellIcon,
-  //   CreditCardIcon,
-  //   CubeIcon,
-  FingerPrintIcon,
-  UserCircleIcon,
-  //   UsersIcon,
-} from '@heroicons/react/24/outline';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
-
-function classNames(...classes: any) {
-  return classes.filter(Boolean).join(' ');
-}
+import { useSelector } from 'react-redux';
+import { DocumentTextIcon, FingerPrintIcon, UserCircleIcon } from '@heroicons/react/24/outline';
+import { RootState } from '@/redux/reducers';
 
 export default function Sidebar() {
   const router = useRouter();
+  const user = useSelector((state: RootState) => state.auth.user);
+  const canWrite = user && user.role !== 'customer';
 
-  const secondaryNavigation = [
+  const items = [
+    { name: 'Perfil', href: '/profile', icon: UserCircleIcon, match: (p: string) => p === '/profile' },
+    ...(canWrite
+      ? [
+          {
+            name: 'Mis artículos',
+            href: '/profile/posts',
+            icon: DocumentTextIcon,
+            match: (p: string) => p.startsWith('/profile/posts'),
+          },
+        ]
+      : []),
     {
-      name: 'Information',
-      href: '/profile',
-      icon: UserCircleIcon,
-      current: router.pathname === '/profile',
-    },
-    {
-      name: 'Security',
+      name: 'Seguridad',
       href: '/profile/security',
       icon: FingerPrintIcon,
-      current: router.pathname === '/profile/security',
+      match: (p: string) => p === '/profile/security',
     },
-    // { name: 'Notifications', href: '#', icon: BellIcon, current: false },
-    // { name: 'Billing', href: '#', icon: CreditCardIcon, current: false },
-    // { name: 'Friends', href: '#', icon: UsersIcon, current: false },
   ];
+
   return (
-    <aside className="flex overflow-x-auto border-b border-gray-900/5 py-4 lg:block lg:w-64 lg:flex-none lg:border-0 lg:py-20">
-      <nav className="flex-none px-4 sm:px-6 lg:px-0">
-        <ul className="flex gap-x-3 gap-y-1 whitespace-nowrap lg:flex-col">
-          {secondaryNavigation.map((item) => (
-            <li key={item.name}>
-              <a
+    <nav aria-label="Mi cuenta" className="-mx-4 sm:mx-0 lg:w-56 lg:flex-none">
+      <ul className="scrollbar-none flex gap-1 overflow-x-auto px-4 sm:px-0 lg:sticky lg:top-24 lg:flex-col">
+        {items.map((item) => {
+          const current = item.match(router.pathname);
+          return (
+            <li key={item.href} className="shrink-0">
+              <Link
                 href={item.href}
-                className={classNames(
-                  item.current
-                    ? 'bg-gray-50 text-indigo-600'
-                    : 'text-gray-700 hover:bg-gray-50 hover:text-indigo-600',
-                  'group flex gap-x-3 rounded-md py-2 pl-2 pr-3 text-sm/6 font-semibold',
-                )}
+                aria-current={current ? 'page' : undefined}
+                className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  current
+                    ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300'
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-dark-txt-secondary dark:hover:bg-dark-second dark:hover:text-white'
+                }`}
               >
-                <item.icon
-                  aria-hidden="true"
-                  className={classNames(
-                    item.current ? 'text-indigo-600' : 'text-gray-400 group-hover:text-indigo-600',
-                    'size-6 shrink-0',
-                  )}
-                />
+                <item.icon className="size-5 shrink-0" aria-hidden="true" />
                 {item.name}
-              </a>
+              </Link>
             </li>
-          ))}
-        </ul>
-      </nav>
-    </aside>
+          );
+        })}
+      </ul>
+    </nav>
   );
 }

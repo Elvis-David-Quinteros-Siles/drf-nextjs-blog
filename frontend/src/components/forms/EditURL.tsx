@@ -30,11 +30,12 @@ export default function EditURL({
   }, [data]); // Update inputValue when 'data' changes
 
   const validate = (value: string) => {
-    if (validator.isURL(value)) {
+    // Un campo vacío es válido (el enlace es opcional)
+    if (value.trim() === '' || validator.isURL(value)) {
       setErrorMessage('');
       // setData(value); // Only update parent state with valid URLs
     } else {
-      setErrorMessage('Invalid URL');
+      setErrorMessage('Introduce una URL válida, por ejemplo https://ejemplo.com');
     }
     setData(value);
   };
@@ -54,7 +55,7 @@ export default function EditURL({
 
   return (
     <div className="w-full">
-      <span className="dark:text-dark-txt mb-2 mb-1 block text-sm font-medium text-gray-900">{title}</span>
+      <span className="dark:text-dark-txt mb-1 block text-sm font-medium text-gray-900">{title}</span>
       <div className={`${inputFormClassName}`}>
         <input
           type="url"
@@ -67,7 +68,7 @@ export default function EditURL({
           aria-describedby="url-input"
         />
       </div>
-      {errorMessage && <p className="mt-2 text-xs text-red-500">{errorMessage}</p>}
+      {errorMessage && <p className="mt-1.5 text-xs text-rose-600 dark:text-rose-400">{errorMessage}</p>}
     </div>
   );
 }

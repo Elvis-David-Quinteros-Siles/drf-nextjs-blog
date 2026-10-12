@@ -11,8 +11,9 @@ import { ToastError, ToastSuccess, ToastWarning } from '@/components/toast/alert
 import { ThunkDispatch } from 'redux-thunk';
 import { UnknownAction } from 'redux';
 import { loadProfile, loadUser } from '@/redux/actions/auth/actions';
-import Button from '@/components/Button';
-import LoadingMoon from '@/components/loaders/LoadingMoon';
+import Link from 'next/link';
+import Card from '@/components/ui/Card';
+import { SITE_URL } from '@/utils/site';
 import EditDate from '@/components/forms/EditDate';
 import EditURL from '@/components/forms/EditURL';
 import EditRichText from '@/components/forms/EditRichText';
@@ -93,7 +94,7 @@ export default function Page() {
   };
 
   const onLoadBannerPicture = (newImage: any) => {
-    if (newImage !== profilePicture) {
+    if (newImage !== bannerPicture) {
       setBannerPicture(newImage);
       setHasChangesBannerPicture(true);
     }
@@ -199,7 +200,7 @@ export default function Page() {
 
     // Revisar si hay algo para guardar
     if (Object.keys(updatedData).length === 0) {
-      ToastWarning('No changes to save.');
+      ToastWarning('No hay cambios para guardar.');
       return;
     }
 
@@ -214,14 +215,14 @@ export default function Page() {
       });
 
       if (response.ok) {
-        ToastSuccess('User data updated successfully');
+        ToastSuccess('Datos de la cuenta actualizados');
         // Actualizar el estado de redux
         await dispatch(loadUser());
       } else {
-        ToastError('Failed to update user data');
+        ToastError('No se pudieron actualizar los datos de la cuenta');
       }
     } catch (error) {
-      ToastError('An error occurred while updating user data');
+      ToastError('No se pudieron actualizar los datos de la cuenta');
     }
   };
 
@@ -266,7 +267,7 @@ export default function Page() {
 
     // Revisar si hay algo para guardar
     if (Object.keys(updatedData).length === 0) {
-      ToastWarning('No changes to save.');
+      ToastWarning('No hay cambios para guardar.');
       return;
     }
 
@@ -281,20 +282,20 @@ export default function Page() {
       });
 
       if (response.ok) {
-        ToastSuccess('Profile data updated successfully');
+        ToastSuccess('Perfil actualizado');
         // Actualizar el estado de redux
         await dispatch(loadProfile());
       } else {
-        ToastError('Failed to update profile data');
+        ToastError('No se pudo actualizar el perfil');
       }
     } catch (error) {
-      ToastError('An error occurred while updating profile data');
+      ToastError('No se pudo actualizar el perfil');
     }
   };
 
   const handleSaveProfilePicture = async () => {
     if (!profilePicture.file) {
-      ToastError('No file selected for upload');
+      ToastError('No has elegido ninguna imagen');
       return null;
     }
 
@@ -331,12 +332,13 @@ export default function Page() {
 
         if (backendResponse.status === 200) {
           setProfilePicturePercentage(0);
-          ToastSuccess('Profile picture updated successfully!');
+          ToastSuccess('Foto de perfil actualizada');
+          dispatch(loadProfile());
           setHasChangesProfilePicture(false);
         }
       }
     } catch (err) {
-      ToastError('Error uploading image to S3');
+      ToastError('No se pudo subir la imagen');
     }
 
     return null;
@@ -344,7 +346,7 @@ export default function Page() {
 
   const handleSaveBannerPicture = async () => {
     if (!bannerPicture.file) {
-      ToastError('No file selected for upload');
+      ToastError('No has elegido ninguna imagen');
       return null;
     }
 
@@ -381,12 +383,12 @@ export default function Page() {
 
         if (backendResponse.status === 200) {
           setBannerPicturePercentage(0);
-          ToastSuccess('Banner picture updated successfully!');
+          ToastSuccess('Portada del perfil actualizada');
           setHasChangesBannerPicture(false);
         }
       }
     } catch (err) {
-      ToastError('Error uploading image to S3');
+      ToastError('No se pudo subir la imagen');
     }
 
     return null;
@@ -399,7 +401,7 @@ export default function Page() {
       !hasChangesProfilePicture &&
       !hasChangesBannerPicture
     ) {
-      ToastWarning('No changes to save.');
+      ToastWarning('No hay cambios para guardar.');
       return;
     }
 
@@ -424,155 +426,115 @@ export default function Page() {
         await handleSaveBannerPicture();
       }
     } catch (error) {
-      ToastError('An error occurred while saving changes.');
+      ToastError('No se pudieron guardar los cambios');
     } finally {
       setLoading(false);
     }
   };
+  const anyChanges =
+    hasChanges || hasChangesProfile || hasChangesProfilePicture || hasChangesBannerPicture;
+
+  const socialFields = [
+    { label: 'Sitio web', value: website, set: setWebsite, placeholder: 'https://tusitio.com' },
+    { label: 'GitHub', value: github, set: setGitHub, placeholder: 'https://github.com/usuario' },
+    { label: 'LinkedIn', value: linkedin, set: setLinkedin, placeholder: 'https://linkedin.com/in/usuario' },
+    { label: 'GitLab', value: gitlab, set: setGitLab, placeholder: 'https://gitlab.com/usuario' },
+    { label: 'YouTube', value: youtube, set: setYouTube, placeholder: 'https://youtube.com/@canal' },
+    { label: 'Instagram', value: instagram, set: setInstagram, placeholder: 'https://instagram.com/usuario' },
+    { label: 'Facebook', value: facebook, set: setFacebook, placeholder: 'https://facebook.com/usuario' },
+    { label: 'Threads', value: threads, set: setThreads, placeholder: 'https://threads.net/@usuario' },
+    { label: 'TikTok', value: tiktok, set: setTikTok, placeholder: 'https://tiktok.com/@usuario' },
+  ];
+
   return (
-    <Container>
-      <div>
-        <div className="">
-          <div className="-ml-4 -mt-4 flex flex-wrap items-center justify-between sm:flex-nowrap">
-            <div className="ml-4 mt-4">
-              <h3 className="text-base font-semibold text-gray-900">User Information</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                This information will be displayed publicly so be careful what you share.
-              </p>
-            </div>
-            <div className="ml-4 mt-4 shrink-0">
-              <Button
-                style={{
-                  width: '150px',
-                }}
-                onClick={handleSaveData}
-                disabled={
-                  loading ||
-                  (!hasChanges &&
-                    !hasChangesProfile &&
-                    !hasChangesProfilePicture &&
-                    !hasChangesBannerPicture)
-                }
-                hoverEffect
-              >
-                {loading ? <LoadingMoon /> : 'Save Changes'}
-              </Button>
-            </div>
+    <Container
+      title="Perfil"
+      description="Esta información aparece en tu perfil público y en tus artículos."
+      actions={
+        user?.username && (
+          <Link href={`/@/${user.username}`} className="btn-ghost border border-gray-200 dark:border-dark-third">
+            Ver perfil público
+          </Link>
+        )
+      }
+    >
+      <Card title="Datos de la cuenta">
+        <div className="grid gap-5 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <EditText
+              title="Nombre de usuario"
+              description={`Tu perfil público: ${SITE_URL.replace('https://', '')}/@/${username || 'usuario'}`}
+              data={username}
+              setData={setUsername}
+            />
+          </div>
+          <EditText title="Nombre" data={firstName} setData={setFirstName} />
+          <EditText title="Apellido" data={lastName} setData={setLastName} />
+        </div>
+      </Card>
+
+      <Card title="Imágenes" description="JPG, PNG o WebP de hasta 5 MB.">
+        <div className="space-y-8">
+          <EditImage
+            onLoad={onLoadProfilePicture}
+            data={profilePicture}
+            setData={setProfilePicture}
+            percentage={profilePicturePerceentage}
+            title="Foto de perfil"
+          />
+          <EditImage
+            onLoad={onLoadBannerPicture}
+            data={bannerPicture}
+            setData={setBannerPicture}
+            percentage={bannerPicturePercentage}
+            variant="banner"
+            title="Portada del perfil"
+          />
+        </div>
+      </Card>
+
+      <Card title="Sobre ti">
+        <div className="space-y-5">
+          <EditRichText
+            title="Biografía"
+            description="Cuéntale a los lectores quién eres y de qué escribes."
+            data={biography}
+            setData={setBiography}
+            compact
+          />
+          <div className="max-w-xs">
+            <EditDate title="Fecha de nacimiento" useTime={false} data={birthday} setData={setBirthDay} />
           </div>
         </div>
+      </Card>
 
-        <dl className="mt-6 space-y-6 divide-y divide-gray-100 border-t border-gray-200 text-sm/6">
-          <div className="pt-6 sm:flex">
-            <dt className="font-medium text-gray-900 sm:w-64 sm:flex-none sm:pr-6">Username</dt>
-            <dd className="mt-1 flex justify-between gap-x-6 sm:mt-0 sm:flex-auto">
-              <EditText data={username} setData={setUsername} />
-            </dd>
-          </div>
-          <div className="pt-6 sm:flex">
-            <dt className="font-medium text-gray-900 sm:w-64 sm:flex-none sm:pr-6">First Name</dt>
-            <dd className="mt-1 flex justify-between gap-x-6 sm:mt-0 sm:flex-auto">
-              <EditText data={firstName} setData={setFirstName} />
-            </dd>
-          </div>
-          <div className="pt-6 sm:flex">
-            <dt className="font-medium text-gray-900 sm:w-64 sm:flex-none sm:pr-6">Last Name</dt>
-            <dd className="mt-1 flex justify-between gap-x-6 sm:mt-0 sm:flex-auto">
-              <EditText data={lastName} setData={setLastName} />
-            </dd>
-          </div>
-        </dl>
-      </div>
-
-      <div>
-        <h2 className="text-base/7 font-semibold text-gray-900">Profile</h2>
-        <p className="mt-1 text-sm/6 text-gray-500">
-          Your public profile information to let the world know more about you.
-        </p>
-
-        <ul className="mt-6 divide-y divide-gray-100 border-t border-gray-200 text-sm/6">
-          <li className="py-6">
-            <EditImage
-              onLoad={onLoadProfilePicture}
-              data={profilePicture}
-              setData={setProfilePicture}
-              percentage={profilePicturePerceentage}
-              title="Profile Picture"
+      <Card title="Enlaces" description="Se muestran como iconos en tu perfil público.">
+        <div className="grid gap-5 sm:grid-cols-2">
+          {socialFields.map((field) => (
+            <EditURL
+              key={field.label}
+              title={field.label}
+              data={field.value}
+              setData={field.set}
+              placeholder={field.placeholder}
             />
-          </li>
-          <li className="py-6">
-            <EditImage
-              onLoad={onLoadBannerPicture}
-              data={bannerPicture}
-              setData={setBannerPicture}
-              percentage={bannerPicturePercentage}
-              variant="banner"
-              title="Banner Picture"
-            />
-          </li>
-          <li className="py-6">
-            <EditRichText title="Biography" data={biography} setData={setBiography} />
-          </li>
-          <li className="py-6 sm:flex">
-            <h4 className="font-medium text-gray-900 sm:w-64 sm:flex-none sm:pr-6">Birthday</h4>
-            <div className="mt-1 flex justify-between gap-x-6 sm:mt-0 sm:flex-auto">
-              <EditDate useTime={false} data={birthday} setData={setBirthDay} />
-            </div>
-          </li>
-          <li className="py-6 sm:flex">
-            <h4 className="font-medium text-gray-900 sm:w-64 sm:flex-none sm:pr-6">Website</h4>
-            <div className="mt-1 flex justify-between gap-x-6 sm:mt-0 sm:flex-auto">
-              <EditURL data={website} setData={setWebsite} />
-            </div>
-          </li>
-          <li className="py-6 sm:flex">
-            <h4 className="font-medium text-gray-900 sm:w-64 sm:flex-none sm:pr-6">Instagram</h4>
-            <div className="mt-1 flex justify-between gap-x-6 sm:mt-0 sm:flex-auto">
-              <EditURL data={instagram} setData={setInstagram} />
-            </div>
-          </li>
-          <li className="py-6 sm:flex">
-            <h4 className="font-medium text-gray-900 sm:w-64 sm:flex-none sm:pr-6">Facebook</h4>
-            <div className="mt-1 flex justify-between gap-x-6 sm:mt-0 sm:flex-auto">
-              <EditURL data={facebook} setData={setFacebook} />
-            </div>
-          </li>
-          <li className="py-6 sm:flex">
-            <h4 className="font-medium text-gray-900 sm:w-64 sm:flex-none sm:pr-6">Threads</h4>
-            <div className="mt-1 flex justify-between gap-x-6 sm:mt-0 sm:flex-auto">
-              <EditURL data={threads} setData={setThreads} />
-            </div>
-          </li>
-          <li className="py-6 sm:flex">
-            <h4 className="font-medium text-gray-900 sm:w-64 sm:flex-none sm:pr-6">LinkedIn</h4>
-            <div className="mt-1 flex justify-between gap-x-6 sm:mt-0 sm:flex-auto">
-              <EditURL data={linkedin} setData={setLinkedin} />
-            </div>
-          </li>
-          <li className="py-6 sm:flex">
-            <h4 className="font-medium text-gray-900 sm:w-64 sm:flex-none sm:pr-6">YouTube</h4>
-            <div className="mt-1 flex justify-between gap-x-6 sm:mt-0 sm:flex-auto">
-              <EditURL data={youtube} setData={setYouTube} />
-            </div>
-          </li>
-          <li className="py-6 sm:flex">
-            <h4 className="font-medium text-gray-900 sm:w-64 sm:flex-none sm:pr-6">TikTok</h4>
-            <div className="mt-1 flex justify-between gap-x-6 sm:mt-0 sm:flex-auto">
-              <EditURL data={tiktok} setData={setTikTok} />
-            </div>
-          </li>
-          <li className="py-6 sm:flex">
-            <h4 className="font-medium text-gray-900 sm:w-64 sm:flex-none sm:pr-6">Github</h4>
-            <div className="mt-1 flex justify-between gap-x-6 sm:mt-0 sm:flex-auto">
-              <EditURL data={github} setData={setGitHub} />
-            </div>
-          </li>
-          <li className="py-6 sm:flex">
-            <h4 className="font-medium text-gray-900 sm:w-64 sm:flex-none sm:pr-6">Gitlab</h4>
-            <div className="mt-1 flex justify-between gap-x-6 sm:mt-0 sm:flex-auto">
-              <EditURL data={gitlab} setData={setGitLab} />
-            </div>
-          </li>
-        </ul>
+          ))}
+        </div>
+      </Card>
+
+      {/* Barra de guardado: fija abajo mientras haya cambios sin guardar */}
+      <div
+        className={`sticky bottom-4 z-20 transition-all duration-200 ${
+          anyChanges ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-4 opacity-0'
+        }`}
+        aria-hidden={!anyChanges}
+      >
+        <div className="flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white/95 px-5 py-3 shadow-lg backdrop-blur dark:border-dark-third dark:bg-dark-bg/95">
+          <p className="text-sm text-gray-700 dark:text-dark-txt">Tienes cambios sin guardar</p>
+          <button type="button" onClick={handleSaveData} disabled={loading} className="btn-primary">
+            {loading ? 'Guardando…' : 'Guardar cambios'}
+          </button>
+        </div>
       </div>
     </Container>
   );

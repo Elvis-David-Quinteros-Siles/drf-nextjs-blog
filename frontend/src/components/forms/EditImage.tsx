@@ -1,8 +1,15 @@
+import { useEffect, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import ReactDropzone from 'react-dropzone';
-import { Line } from 'rc-progress';
-import Image from 'next/image';
+import { PhotoIcon } from '@heroicons/react/24/outline';
 import { ToastError } from '../toast/alerts';
+
+const MAX_SIZE_MB = 5;
+const ALLOWED_TYPES: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+};
 
 interface ComponentProps {
   encoding?: string;
@@ -10,9 +17,14 @@ interface ComponentProps {
   setData: any;
   onLoad?: any;
   percentage?: number;
-  variant?: string;
+  /** profile: avatar redondo · banner: franja ancha · cover: portada 1200x630 */
+  variant?: 'profile' | 'banner' | 'cover';
   title?: string;
   description?: string;
+}
+
+function isUrl(value: unknown): value is string {
+  return typeof value === 'string' && /^https?:\/\//.test(value);
 }
 
 export default function EditImage({
@@ -22,198 +34,134 @@ export default function EditImage({
   onLoad = null,
   percentage = 0,
   variant = 'profile',
-  title = 'File',
+  title = '',
   description = '',
 }: ComponentProps) {
-  const handleDrop = (acceptedFiles: any) => {
-    const acceptedFile = acceptedFiles[0];
+  const handleDrop = (acceptedFiles: File[]) => {
+    const file = acceptedFiles[0];
+    if (!file) return;
 
-    if (acceptedFile.size > 2 * 1024 * 1024) {
-      ToastError('Image must be Max 2MB');
+    if (!ALLOWED_TYPES[file.type]) {
+      ToastError('Formato no permitido. Usa JPG, PNG o WebP.');
+      return;
+    }
+    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+      ToastError(`La imagen supera los ${MAX_SIZE_MB} MB.`);
       return;
     }
 
-    const allowedFileTypes = ['image/jpeg', 'image/png'];
+    const base = {
+      id: uuidv4(),
+      title: file.name,
+      size: `${(file.size / 1024).toFixed(2)} KB`,
+      type: ALLOWED_TYPES[file.type],
+      lastModified: file.lastModified,
+    };
 
-    if (!allowedFileTypes.includes(acceptedFile.type)) {
-      ToastError(
-        `${acceptedFile.type} is not allowed. Only .jpg, .jpeg or .png extensions are allowed`,
-      );
-      return;
-    }
-
-    const reader = new FileReader();
+    const commit = (item: any) => {
+      setData(item);
+      if (onLoad) onLoad(item);
+    };
 
     if (encoding === 'base64') {
-      reader.readAsDataURL(acceptedFile);
-      reader.onload = () => {
-        const sizeInKB = acceptedFile.size / 1024;
-        const fileTypeMapping: { [key: string]: string } = {
-          'image/jpeg': '.jpg',
-          'image/png': '.png',
-        };
-        const newItem = {
-          id: uuidv4(),
-          title: acceptedFile.name,
-          file: reader.result,
-          size: `${sizeInKB.toFixed(2)} KB`,
-          type: fileTypeMapping[acceptedFile.type] || acceptedFile.type,
-          lastModified: acceptedFile.lastModified,
-        };
-        setData(newItem);
-        if (onLoad) {
-          onLoad(newItem);
-        }
-      };
-    }
-
-    if (encoding === 'multipart') {
-      const sizeInKB = acceptedFile.size / 1024;
-      const fileTypeMapping: { [key: string]: string } = {
-        'image/jpeg': '.jpg',
-        'image/png': '.png',
-      };
-      const newItem = {
-        id: uuidv4(),
-        title: acceptedFile.name,
-        file: acceptedFile,
-        size: `${sizeInKB.toFixed(2)} KB`,
-        type: fileTypeMapping[acceptedFile.type] || acceptedFile.type,
-        lastModified: acceptedFile.lastModified,
-      };
-      setData(newItem);
-      if (onLoad) {
-        onLoad(newItem);
-      }
+      const reader = new FileReader();
+      reader.onload = () => commit({ ...base, file: reader.result });
+      reader.readAsDataURL(file);
+    } else {
+      commit({ ...base, file });
     }
   };
 
-  const isValidUrl = (string: string) => {
-    try {
-      // eslint-disable-next-line
-      const url = new URL(string);
-      return true;
-    } catch {
-      return false;
-    }
-  };
+  // URL de vista previa: imagen ya guardada (URL) o archivo recién elegido
+  const previewUrl = useMemo(() => {
+    if (isUrl(data)) return data;
+    if (data?.file instanceof File) return URL.createObjectURL(data.file);
+    if (typeof data?.file === 'string') return data.file;
+    return '';
+  }, [data]);
 
-  const getSrcUrl = () => {
-    if (isValidUrl(data)) {
-      return data;
-    }
+  useEffect(
+    () => () => {
+      if (previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+    },
+    [previewUrl],
+  );
 
-    if (encoding === 'base64' && data?.file) {
-      return data.file;
-    }
+  const previewClass = {
+    profile: 'size-24 rounded-full',
+    banner: 'aspect-[4/1] w-full rounded-xl',
+    cover: 'aspect-[1200/630] w-full rounded-xl',
+  }[variant];
 
-    if (encoding === 'multipart' && data?.file) {
-      return URL.createObjectURL(data.file);
-    }
-
-    return '/assets/img/placeholder/media.jpg';
-  };
-
-  const srcUrl = getSrcUrl();
-
-  const normalStyle = <div>Normal style</div>;
-
-  const bannerStyle = (
-    <div>
-      <span className="dark:text-dark-txt mb-1 block text-sm font-medium text-gray-900">{title}</span>
-      <span className="dark:text-dark-txt-secondary mb-2 block text-sm text-gray-500">
-        {description}
-      </span>
-      <div className="w-full">
-        <div className="flex flex-col-reverse">
-          {data && (
-            <Image
-              width={512}
-              height={512}
-              src={srcUrl}
-              alt=""
-              className="h-48 w-auto object-cover"
-            />
-          )}
+  const dropzone = (
+    <ReactDropzone
+      onDrop={handleDrop}
+      accept={{ 'image/jpeg': [], 'image/png': [], 'image/webp': [] }}
+      multiple={false}
+    >
+      {({ getRootProps, getInputProps, isDragActive }) => (
+        <div
+          {...getRootProps()}
+          className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-5 text-center transition-colors ${
+            isDragActive
+              ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-500/10'
+              : 'border-gray-300 hover:border-indigo-400 hover:bg-gray-50 dark:border-dark-third dark:hover:border-indigo-500/60 dark:hover:bg-dark-second'
+          }`}
+        >
+          <input {...getInputProps()} />
+          <PhotoIcon className="size-7 text-gray-400" aria-hidden="true" />
+          <p className="mt-2 text-sm font-medium text-gray-700 dark:text-dark-txt">
+            {data?.file ? data.title : 'Arrastra una imagen o haz clic para elegirla'}
+          </p>
+          <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+            JPG, PNG o WebP · máx. {MAX_SIZE_MB} MB
+          </p>
         </div>
+      )}
+    </ReactDropzone>
+  );
+
+  const preview = previewUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={previewUrl}
+      alt="Vista previa"
+      className={`${previewClass} shrink-0 border border-gray-200 object-cover dark:border-dark-third`}
+    />
+  ) : (
+    <div
+      aria-hidden="true"
+      className={`${previewClass} shrink-0 bg-gradient-to-br from-indigo-100 to-violet-100 dark:from-indigo-500/20 dark:to-violet-500/20`}
+    />
+  );
+
+  return (
+    <div>
+      {title && (
+        <span className="mb-1 block text-sm font-medium text-gray-900 dark:text-dark-txt">{title}</span>
+      )}
+      {description && (
+        <span className="mb-2 block text-sm text-gray-500 dark:text-dark-txt-secondary">{description}</span>
+      )}
+      <div className={variant === 'profile' ? 'flex items-center gap-4' : 'space-y-3'}>
+        {preview}
+        <div className="min-w-0 flex-1">{dropzone}</div>
       </div>
-      <div className="mt-2 w-full">
-        <ReactDropzone onDrop={handleDrop}>
-          {({ getRootProps, getInputProps }) => (
-            <div
-              className="form-control text-md dark:border-dark-border dark:bg-dark-second dark:text-dark-txt-secondary hover:dark:bg-dark-third m-0 block w-full flex-grow cursor-pointer rounded border-2 border-dashed border-gray-200 bg-white bg-clip-padding p-4 text-gray-700 transition ease-in-out hover:border-gray-300 hover:bg-gray-50 focus:border-blue-600 focus:bg-white focus:text-gray-700 focus:outline-none"
-              {...getRootProps()}
-            >
-              <input {...getInputProps()} />
-              <span>{data?.file ? data?.title : 'Drag and drop or click to upload file'}</span>
-            </div>
-          )}
-        </ReactDropzone>
-        <div className="mt-2">
-          <Line
-            percent={percentage}
-            strokeWidth={2}
-            strokeColor={percentage < 70 ? '#e6007a' : '#b1fec5'}
+      {percentage > 0 && (
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-dark-second">
+          <div
+            className="h-full rounded-full bg-indigo-600 transition-all"
+            style={{ width: `${percentage}%` }}
+            role="progressbar"
+            aria-valuenow={percentage}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Progreso de subida"
           />
         </div>
-      </div>
+      )}
     </div>
   );
-
-  const profileStyle = (
-    <div>
-      <span className="dark:text-dark-txt mb-1 block text-sm font-medium text-gray-900">{title}</span>
-      <span className="dark:text-dark-txt-secondary mb-2 block text-sm text-gray-500">
-        {description}
-      </span>
-      <div className="flex flex-col items-center gap-2 md:flex-row">
-        <div className="flex-shrink-0">
-          <div className="aspect-w-0.5 aspect-h-0.5 w-32">
-            {data && (
-              <Image
-                width={512}
-                height={512}
-                src={srcUrl}
-                alt=""
-                className="h-32 w-auto rounded-full object-cover object-center"
-              />
-            )}
-          </div>
-        </div>
-        <div className="w-full">
-          <ReactDropzone onDrop={handleDrop}>
-            {({ getRootProps, getInputProps }) => (
-              <div
-                className="form-control text-md dark:border-dark-border dark:bg-dark-second dark:text-dark-txt-secondary hover:dark:bg-dark-third m-0 block w-full flex-grow cursor-pointer rounded border-2 border-dashed border-gray-200 bg-white bg-clip-padding p-4 text-gray-700 transition ease-in-out hover:border-gray-300 hover:bg-gray-50 focus:border-blue-600 focus:bg-white focus:text-gray-700 focus:outline-none"
-                {...getRootProps()}
-              >
-                <input {...getInputProps()} />
-                <span>{data?.file ? data?.title : 'Drag and drop or click to upload file'}</span>
-              </div>
-            )}
-          </ReactDropzone>
-          <div className="mt-2">
-            <Line
-              percent={percentage}
-              strokeWidth={2}
-              strokeColor={percentage < 70 ? '#e6007a' : '#b1fec5'}
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  switch (variant) {
-    case 'profile':
-      return profileStyle;
-    case 'normal':
-      return normalStyle;
-    case 'banner':
-      return bannerStyle;
-    default:
-      return null;
-  }
 }
 
 EditImage.defaultProps = {
@@ -221,6 +169,6 @@ EditImage.defaultProps = {
   onLoad: null,
   percentage: 0,
   variant: 'profile',
-  title: 'File',
+  title: '',
   description: '',
 };
