@@ -1,0 +1,37 @@
+# ---- Build ----
+FROM node:20-alpine AS build
+
+WORKDIR /app
+
+# El lockfile válido del proyecto es yarn.lock (package-lock.json está desactualizado)
+COPY package.json yarn.lock ./
+RUN yarn install --frozen-lockfile --network-timeout 600000
+
+COPY . .
+
+# Variables que Next incrusta en la build (NEXT_PUBLIC_*) o que lee next.config.ts
+ARG NEXT_PUBLIC_AWS_S3_BUCKET_NAME
+ARG AWS_S3_PUBLIC_ENDPOINT_URL
+ENV NEXT_PUBLIC_AWS_S3_BUCKET_NAME=$NEXT_PUBLIC_AWS_S3_BUCKET_NAME \
+    AWS_S3_PUBLIC_ENDPOINT_URL=$AWS_S3_PUBLIC_ENDPOINT_URL \
+    NEXT_TELEMETRY_DISABLED=1
+
+RUN yarn build && yarn install --frozen-lockfile --production --ignore-scripts --prefer-offline
+
+# ---- Runtime ----
+FROM node:20-alpine
+
+WORKDIR /app
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1
+
+COPY --from=build --chown=node:node /app/package.json ./
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/.next ./.next
+COPY --from=build --chown=node:node /app/public ./public
+COPY --from=build --chown=node:node /app/next.config.ts ./
+
+USER node
+EXPOSE 3000
+
+CMD ["yarn", "start"]

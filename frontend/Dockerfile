@@ -2,12 +2,12 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-# React 19 RC genera conflictos de peer dependencies con algunas librerías
-RUN npm ci --legacy-peer-deps
+# El lockfile válido del proyecto es yarn.lock (package-lock.json está desactualizado)
+COPY package.json yarn.lock ./
+RUN yarn install --frozen-lockfile --network-timeout 600000
 
 COPY . .
 
 EXPOSE 3000
 
-CMD ["npm", "run", "dev"]
+CMD ["yarn", "dev"]

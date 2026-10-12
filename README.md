@@ -31,7 +31,9 @@ drf-nextjs-blog/
 ├── frontend/             # App Next.js (pages router)
 │   └── src/
 ├── tailwind_components/  # Componentes HTML/Tailwind de referencia
-└── docker-compose.yml
+├── deploy/nginx/         # Configuración de nginx para producción
+├── docker-compose.yml       # Desarrollo
+└── docker-compose.prod.yml  # Producción
 ```
 
 ## Levantar con Docker
@@ -100,6 +102,28 @@ docker compose exec backend python manage.py createsuperuser
 ```
 
 Al iniciar, el backend aplica las migraciones y ejecuta `collectstatic`.
+
+## Producción
+
+El despliegue en el VPS usa `docker-compose.prod.yml`, con el frontend compilado (`next build`), Uvicorn sin recarga y un nginx propio (`blog-nginx`) que reparte el tráfico:
+
+| URL | Destino |
+|---|---|
+| `https://blog.edqs.online` | Frontend (Next.js) |
+| `https://blog.edqs.online/<bucket>/...` | MinIO (imágenes con URL firmada) |
+| `https://api.blog.edqs.online` | Backend (API y admin de Django) |
+
+El nginx del host termina TLS y reenvía ambos subdominios a `blog-nginx` por la red `proxy`
+(bloque de ejemplo en `deploy/nginx/edqs-blog.host.conf`). PostgreSQL y MinIO son compartidos
+y se alcanzan por las redes externas `blog-db` y `minio-net`.
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Variables a ajustar en producción (`backend/.env`):
+`DEBUG=False`, `USE_X_FORWARDED_PROTO=True`, `ALLOWED_HOSTS`, `CORS_ORIGIN_WHITELIST`, `CSRF_TRUSTED_ORIGINS`,
+`FRONTEND_DOMAIN`, `AWS_S3_ENDPOINT_URL=http://minio:9000` y `AWS_S3_PUBLIC_ENDPOINT_URL=https://blog.edqs.online`.
 
 ## Configuración del almacenamiento
 

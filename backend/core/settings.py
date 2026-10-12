@@ -19,7 +19,13 @@ SECRET_KEY = env("SECRET_KEY")
 VALID_API_KEYS = env.str("VALID_API_KEYS").split(",")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env.bool("DEBUG", default=True)
+
+# Detrás de un proxy que termina TLS (nginx), confía en X-Forwarded-Proto
+if env.bool("USE_X_FORWARDED_PROTO", default=False):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_SECURE = True
 
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS")
 CORS_ORIGIN_WHITELIST = env.list("CORS_ORIGIN_WHITELIST")
@@ -201,6 +207,10 @@ SIMPLE_JWT = {
     "SIGNING_KEY": env("SECRET_KEY"),
 }
 
+# Dominio del frontend que djoser usa en los enlaces de los correos (activación, reset de contraseña)
+DOMAIN = env("FRONTEND_DOMAIN", default="localhost:3000")
+SITE_NAME = env("SITE_NAME", default="Blog")
+
 DJOSER = {
     'LOGIN_FIELD': "email",
     'USER_CREATE_PASSWORD_RETYPE': True,
@@ -250,7 +260,7 @@ CACHES = {
     }
 }
 
-CHANNELS_ALLOWED_ORIGINS = "http://localhost:3000"
+CHANNELS_ALLOWED_ORIGINS = env("CHANNELS_ALLOWED_ORIGINS", default="http://localhost:3000")
 
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
@@ -334,11 +344,12 @@ else:
     DEFAULT_FILE_STORAGE = "core.storage_backends.PublicMediaStorage"
 
 
-if not DEBUG:
+# El envío por SMTP se activa al definir EMAIL_HOST; sin él los correos se imprimen en los logs
+if env("EMAIL_HOST", default=None):
     EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
     EMAIL_HOST = env("EMAIL_HOST")
     EMAIL_PORT = env("EMAIL_PORT")
     EMAIL_HOST_USER = env("EMAIL_HOST_USER")
     EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD")
     EMAIL_USE_TLS = env("EMAIL_USE_TLS") == "True"
-    DEFAULT_FROM_EMAIL = "Uridium <no-reply@uridium.finance>"
+    DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="Blog <no-reply@edqs.online>")

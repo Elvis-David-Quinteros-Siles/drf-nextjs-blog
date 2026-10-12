@@ -1,4 +1,4 @@
-import { configureStore } from '@reduxjs/toolkit';
+import { configureStore, type Reducer } from '@reduxjs/toolkit';
 // import storage from 'redux-persist/lib/storage';
 import { createWrapper } from 'next-redux-wrapper';
 import { persistReducer, persistStore } from 'redux-persist';
@@ -10,7 +10,10 @@ const persistConfig = {
   storage,
 };
 
-const peristedReducer = persistReducer(persistConfig, rootReducer);
+type RootState = ReturnType<typeof rootReducer>;
+
+// combineReducers (Redux 5) acepta un estado inicial parcial; redux-persist espera el estado completo
+const peristedReducer = persistReducer<RootState>(persistConfig, rootReducer as Reducer<RootState>);
 
 const makeStore = () => {
   const store = configureStore({

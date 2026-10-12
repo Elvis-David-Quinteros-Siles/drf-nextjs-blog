@@ -1,0 +1,119 @@
+# Producción (VPS): docker compose -f docker-compose.prod.yml up -d --build
+#
+# Servicios externos que este compose NO crea:
+#   - nginx del host (red "proxy"): termina TLS y envía blog.edqs.online y api.blog.edqs.online a blog-nginx.
+#   - MinIO compartido (red "minio-net"), accesible como http://minio:9000.
+#   - PostgreSQL compartido (red "blog-db").
+#
+# blog-nginx reparte el tráfico:
+#   blog.edqs.online                    -> frontend (Next.js)
+#   blog.edqs.online/<bucket>/...       -> MinIO (URLs firmadas de imágenes)
+#   api.blog.edqs.online                -> backend (Django, admin)
+
+name: drf-nextjs-blog
+
+x-backend-base: &backend-base
+  build: ./backend
+  image: drf-nextjs-blog-backend:latest
+  env_file: ./backend/.env
+  networks:
+    - internal
+    - minio-net
+    - blog-db
+  restart: unless-stopped
+
+services:
+  backend:
+    <<: *backend-base
+    container_name: blog-backend
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             uvicorn core.asgi:application --host 0.0.0.0 --port 8000 --workers 2 --proxy-headers --forwarded-allow-ips='*'"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/admin/login/')"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    mem_limit: 512m
+
+  celery-worker:
+    <<: *backend-base
+    container_name: blog-celery-worker
+    command: celery -A core worker --loglevel=info --concurrency=2
+    depends_on:
+      backend:
+        condition: service_healthy
+    mem_limit: 384m
+
+  celery-beat:
+    <<: *backend-base
+    container_name: blog-celery-beat
+    command: celery -A core beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    depends_on:
+      backend:
+        condition: service_healthy
+    mem_limit: 256m
+
+  redis:
+    image: redis:7-alpine
+    container_name: blog-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    mem_limit: 128m
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        NEXT_PUBLIC_AWS_S3_BUCKET_NAME: ${BLOG_BUCKET:-drf-nextjs-blog}
+        AWS_S3_PUBLIC_ENDPOINT_URL: ${BLOG_PUBLIC_URL:-https://blog.edqs.online}
+    image: drf-nextjs-blog-frontend:latest
+    container_name: blog-frontend
+    env_file: ./frontend/.env
+    networks:
+      - internal
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 512m
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: blog-nginx
+    volumes:
+      - ./deploy/nginx/blog.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - internal
+      - minio-net
+      - proxy
+    depends_on:
+      - frontend
+    restart: unless-stopped
+    mem_limit: 64m
+
+volumes:
+  redis-data:
+
+networks:
+  internal:
+  proxy:
+    external: true
+  minio-net:
+    external: true
+  blog-db:
+    external: true
