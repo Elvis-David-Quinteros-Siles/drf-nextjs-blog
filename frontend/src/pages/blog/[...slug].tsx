@@ -50,10 +50,31 @@ export const getServerSideProps: GetServerSideProps = async (
     return { notFound: true };
   }
 
-  return { props: { post } };
+  // Nombre y foto del autor (la API del post solo trae el nombre de usuario)
+  let author: { name: string; picture: string | null } = { name: post.user, picture: null };
+  try {
+    const authorRes = await fetch(
+      `${process.env.API_URL}/api/profile/get/?username=${encodeURIComponent(post.user)}`,
+      { headers: { Accept: 'application/json', 'API-Key': `${process.env.BACKEND_API_KEY}` } },
+    );
+    if (authorRes.status === 200) {
+      const { user, profile } = (await authorRes.json()).results;
+      author = {
+        name: [user?.first_name, user?.last_name].filter(Boolean).join(' ') || post.user,
+        picture: profile?.profile_picture?.url || null,
+      };
+    }
+  } catch (e) {
+    // Sin perfil se muestra el nombre de usuario con sus iniciales
+  }
+
+  return { props: { post, author } };
 };
 
-export default function Page({ post }: InferGetServerSidePropsType<typeof getServerSideProps>) {
+export default function Page({
+  post,
+  author,
+}: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const headings = useMemo(
     () => [...(post?.headings || [])].sort((a, b) => a.order - b.order),
     [post?.headings],
@@ -94,7 +115,7 @@ export default function Page({ post }: InferGetServerSidePropsType<typeof getSer
         description={post?.description}
         keywords={post?.keywords}
         href={`${SITE_URL}/blog/${post?.slug}`}
-        author={post?.user}
+        author={author?.name}
         image={post?.thumbnail?.url}
         type="article"
       />
@@ -130,8 +151,8 @@ export default function Page({ post }: InferGetServerSidePropsType<typeof getSer
                 href={`/@/${post?.user}`}
                 className="flex items-center gap-2 font-medium text-gray-900 hover:text-indigo-600 dark:text-white"
               >
-                <Avatar name={post?.user} className="size-8" />
-                {post?.user}
+                <Avatar name={author?.name} src={author?.picture} className="size-8" />
+                {author?.name}
               </Link>
               <span aria-hidden="true">·</span>
               <time dateTime={post?.created_at}>{formatDate(post?.created_at)}</time>

@@ -96,7 +96,15 @@ export default function Page({
       <div className="relative h-36 overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 sm:h-56">
         {profile?.banner_picture?.url && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={profile.banner_picture.url} alt="" className="size-full object-cover" />
+          <img
+            src={profile.banner_picture.url}
+            alt=""
+            className="size-full object-cover"
+            // Si la imagen no existe, queda el degradado de fondo
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
         )}
       </div>
 

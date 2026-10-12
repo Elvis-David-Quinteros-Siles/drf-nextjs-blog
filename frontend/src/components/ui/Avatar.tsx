@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { initials } from '@/utils/format';
 
 interface ComponentProps {
@@ -6,15 +7,22 @@ interface ComponentProps {
   className?: string;
 }
 
-/** Foto de perfil o, si no hay, un círculo con las iniciales. */
+/** Foto de perfil o, si no hay o no carga, un círculo con las iniciales. */
 export default function Avatar({ name, src, className = 'size-9' }: ComponentProps) {
-  if (src) {
+  const [failed, setFailed] = useState<boolean>(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
+  if (src && !failed) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={src}
         alt={name ? `Foto de ${name}` : ''}
         loading="lazy"
+        onError={() => setFailed(true)}
         className={`${className} shrink-0 rounded-full bg-gray-100 object-cover dark:bg-dark-second`}
       />
     );
