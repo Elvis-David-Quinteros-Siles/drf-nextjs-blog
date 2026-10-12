@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from apps.authentication.serializers import UserPublicSerializer
+
 from .models import (
     Post, 
     Category, 
@@ -184,6 +186,8 @@ class PostInteractionSerializer(serializers.ModelSerializer):
 
 class CommentSerializer(serializers.ModelSerializer):
     user = serializers.StringRelatedField()
+    # Nombre completo y foto para mostrar el autor del comentario
+    author = UserPublicSerializer(source="user", read_only=True)
     post_title = serializers.SerializerMethodField()
     replies_count = serializers.SerializerMethodField()
     # replies = serializers.SerializerMethodField()
@@ -193,6 +197,7 @@ class CommentSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "user",
+            "author",
             "post",
             "post_title",
             "parent",

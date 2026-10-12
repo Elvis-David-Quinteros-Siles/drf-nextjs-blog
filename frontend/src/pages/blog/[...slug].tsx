@@ -4,6 +4,7 @@ import parse, { DOMNode, Element } from 'html-react-parser';
 import { GetServerSideProps, GetServerSidePropsContext, InferGetServerSidePropsType } from 'next';
 import { ArrowLeftIcon, ClockIcon } from '@heroicons/react/24/outline';
 import EmailInput from '@/components/cta/EmailInput';
+import CommentsSection from '@/components/pages/blog/comments/CommentsSection';
 import Like from '@/components/pages/blog/Like';
 import PostsList from '@/components/pages/blog/PostsList';
 import ReadingProgress from '@/components/pages/blog/ReadingProgress';
@@ -199,6 +200,10 @@ export default function Page({
                   <span className="text-sm text-gray-500 dark:text-gray-400">¿Te sirvió?</span>
                 </div>
                 <Share post={post} />
+              </div>
+
+              <div className="mt-12 border-t border-gray-200 pt-10 dark:border-dark-third">
+                <CommentsSection postSlug={post.slug} postAuthor={post.user} />
               </div>
             </div>
 

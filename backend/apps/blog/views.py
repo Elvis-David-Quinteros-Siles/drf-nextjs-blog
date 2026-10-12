@@ -36,6 +36,24 @@ import uuid
 from django.utils.text import slugify
 
 
+
+def invalidate_comment_caches(comment):
+    """
+    Invalida la caché de comentarios afectada por crear, editar o borrar `comment`:
+    la lista principal del post y las listas de respuestas de todos sus ancestros
+    (sus contadores de respuestas cambian) y la del propio comentario.
+    """
+    def _clear(index_key):
+        for key in cache.get(index_key, []):
+            cache.delete(key)
+        cache.delete(index_key)
+
+    _clear(f"post_comments_cache_keys:{comment.post.slug}")
+    node = comment
+    while node is not None:
+        _clear(f"comment_replies_cache_keys:{node.id}")
+        node = node.parent
+
 redis_client = redis.StrictRedis(host=settings.REDIS_HOST, port=6379, db=0)
 
 
@@ -710,20 +728,21 @@ class ListPostCommentsView(StandardAPIView):
 
         if not post_slug:
             raise NotFound(detail="A valid post slug must be provided")
-        
+
         # Definir clave cache
         cache_key = f"post_comments:{post_slug}:{page}"
-        cached_comments = cache.get(cache_key)
-        if cached_comments:
-            return self.paginate(request, cached_comments)
-        
+        cached = cache.get(cache_key)
+        if isinstance(cached, dict):
+            return self.paginate_with_extra(request, cached["comments"], {"total": cached["total"]})
+
         try:
             post = Post.objects.get(slug=post_slug)
         except Post.DoesNotExist:
-            raise ValueError(f"Post: {post_slug} does not exist")
-        
-        # Obtener solo los comentarios principales
-        comments = Comment.objects.filter(post=post, parent=None)
+            raise NotFound(detail=f"Post: {post_slug} does not exist")
+
+        # Comentarios principales; "total" cuenta también las respuestas
+        comments = Comment.objects.filter(post=post, parent=None, is_active=True)
+        total = Comment.objects.filter(post=post, is_active=True).count()
 
         serialized_comments = CommentSerializer(comments, many=True).data
 
@@ -734,9 +753,9 @@ class ListPostCommentsView(StandardAPIView):
         cache.set(cache_index_key, cache_keys, timeout=60 * 5)
 
         # Almacenar los datos en caché
-        cache.set(cache_key, serialized_comments, timeout=60 * 5)
+        cache.set(cache_key, {"comments": serialized_comments, "total": total}, timeout=60 * 5)
 
-        return self.paginate(request, serialized_comments)
+        return self.paginate_with_extra(request, serialized_comments, {"total": total})
 
 
 class PostCommentViews(StandardAPIView):
@@ -754,9 +773,12 @@ class PostCommentViews(StandardAPIView):
 
         if not post_slug:
             raise NotFound(detail="A valid post slug must be provided")
+
+        if not BeautifulSoup(content, "html.parser").get_text(strip=True):
+            raise ValidationError("El comentario está vacío.")
         
         try:
-            post = Post.objects.get(slug=post_slug)
+            post = Post.objects.get(slug=post_slug, status="published")
         except Post.DoesNotExist:
             raise NotFound(detail=f"Post: {post_slug} does not exist")
         
@@ -767,13 +789,12 @@ class PostCommentViews(StandardAPIView):
             content=content,
         )
 
-        # Invalidar el cache de comentarios para el post
-        self._invalidate_post_comments_cache(post_slug)
+        invalidate_comment_caches(comment)
 
         # Actualizar interaccion de post
         self._register_comment_interaction(comment, post, ip_address, user)
 
-        return self.response(f"Comment created for post {post.title}")
+        return self.response(CommentSerializer(comment).data, status=status.HTTP_201_CREATED)
     
     def put(self, request):
         """
@@ -794,13 +815,9 @@ class PostCommentViews(StandardAPIView):
         comment.content = content
         comment.save()
 
-        # Invalidar el cache de comentarios para el post
-        self._invalidate_post_comments_cache(comment.post.slug)
+        invalidate_comment_caches(comment)
 
-        if comment.parent and comment.parent.replies.exists():
-            self._invalidate_comment_replies_cache(comment.parent.id)
-
-        return self.response("Comment content updated successfully")
+        return self.response(CommentSerializer(comment).data)
     
     def delete(self, request):
         """
@@ -819,9 +836,9 @@ class PostCommentViews(StandardAPIView):
         post = comment.post
         post_analytics, _ = PostAnalytics.objects.get_or_create(post=post)
 
-        if comment.parent and comment.parent.replies.exists():
-            self._invalidate_comment_replies_cache(comment.parent.id)
+        invalidate_comment_caches(comment)
 
+        # Borra también sus respuestas (on_delete=CASCADE)
         comment.delete()
 
         # Actualizar metricas
@@ -829,9 +846,6 @@ class PostCommentViews(StandardAPIView):
 
         post_analytics.comments = comments_count
         post_analytics.save()
-
-        # Invalidar el cache de comentarios para el post
-        self._invalidate_post_comments_cache(post.slug)
 
         return self.response("Comment deleted successfully")
     
@@ -847,33 +861,6 @@ class PostCommentViews(StandardAPIView):
 
         analytics, _ = PostAnalytics.objects.get_or_create(post=post)
         analytics.increment_metric("comments")
-
-    def _invalidate_post_comments_cache(self, post_slug):
-        """
-        Invalida todas las claves de caché relacionadas con los comentarios de un post.
-        """
-        # definir clave cache
-        cache_index_key = f"post_comments_cache_keys:{post_slug}"
-        cache_keys = cache.get(cache_index_key, [])
-
-        # Eliminar cada clave almacenada en el indice
-        for key in cache_keys:
-            cache.delete(key)
-
-        # Limpiar el indice de claves
-        cache.delete(cache_index_key)
-
-    def _invalidate_comment_replies_cache(self, comment_id):
-        """
-        Invalida todas las claves de caché relacionadas con las respuestas de un comentario.
-        """
-        cache_index_key = f"comment_replies_cache_keys:{comment_id}"
-        cache_keys = cache.get(cache_index_key, [])
-
-        for key in cache_keys:
-            cache.delete(key)
-
-        cache.delete(cache_index_key)
 
 
 class ListCommentRepliesView(StandardAPIView):
@@ -900,7 +887,7 @@ class ListCommentRepliesView(StandardAPIView):
             raise NotFound(detail=f"Comment with id: {comment_id} does not exist")
         
         # Filtrar las respuestas activas del comentario padre
-        replies = parent_comment.replies.filter(is_active=True).order_by("-created_at")
+        replies = parent_comment.replies.filter(is_active=True).order_by("created_at")
 
         # Serializar respuesta
         serialized_replies = CommentSerializer(replies, many=True).data
@@ -938,6 +925,9 @@ class CommentReplyViews(StandardAPIView):
         if not comment_id:
             raise NotFound(detail="A valid comment_id must be provided")
 
+        if not BeautifulSoup(content, "html.parser").get_text(strip=True):
+            raise ValidationError("La respuesta está vacía.")
+
         # Obtener el comentario padre
         try:
             parent_comment = Comment.objects.get(id=comment_id)
@@ -952,13 +942,12 @@ class CommentReplyViews(StandardAPIView):
             content=content,
         )
 
-        # Invalidar caché de respuestas
-        self._invalidate_comment_replies_cache(comment_id)
+        invalidate_comment_caches(comment)
 
-        # Actualiizar metricas
+        # Actualizar métricas
         self._register_comment_interaction(comment, comment.post, ip_address, user)
 
-        return self.response("Comment reply created successfully")
+        return self.response(CommentSerializer(comment).data, status=status.HTTP_201_CREATED)
 
     def _register_comment_interaction(self, comment, post, ip_address, user):
 
@@ -972,19 +961,6 @@ class CommentReplyViews(StandardAPIView):
 
         analytics, _ = PostAnalytics.objects.get_or_create(post=post)
         analytics.increment_metric("comments")
-
-    def _invalidate_comment_replies_cache(self, comment_id):
-        """
-        Invalida todas las claves de caché relacionadas con las respuestas de un comentario.
-        """
-        cache_index_key = f"comment_replies_cache_keys:{comment_id}"
-        cache_keys = cache.get(cache_index_key, [])
-
-        for key in cache_keys:
-            cache.delete(key)
-
-        cache.delete(cache_index_key)
-
 
 class PostLikeViews(StandardAPIView):
     permission_classes = [HasValidAPIKey, permissions.IsAuthenticated]
