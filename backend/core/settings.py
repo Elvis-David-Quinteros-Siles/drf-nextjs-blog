@@ -287,7 +287,19 @@ CELERY_IMPORTS = (
 )
 
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
-CELERY_BEAT_SCHEDULE = {}
+# Con DatabaseScheduler, beat sincroniza estas entradas con la base al arrancar
+# (también se pueden ajustar luego desde el admin, en Periodic tasks).
+CELERY_BEAT_SCHEDULE = {
+    # Las impresiones se acumulan en Redis y se vuelcan a la base cada 5 minutos
+    "sync-post-impressions": {
+        "task": "apps.blog.tasks.sync_impressions_to_db",
+        "schedule": 300,
+    },
+    "sync-category-impressions": {
+        "task": "apps.blog.tasks.sync_category_impressions_to_db",
+        "schedule": 300,
+    },
+}
 
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
