@@ -212,6 +212,10 @@ DOMAIN = env("FRONTEND_DOMAIN", default="localhost:3000")
 SITE_NAME = env("SITE_NAME", default="Blog")
 
 DJOSER = {
+    # Los enlaces de los correos apuntan al frontend (la API recibe las peticiones por http interno)
+    "EMAIL_FRONTEND_PROTOCOL": env("FRONTEND_PROTOCOL", default="http"),
+    "EMAIL_FRONTEND_DOMAIN": DOMAIN,
+    "EMAIL_FRONTEND_SITE_NAME": SITE_NAME,
     'LOGIN_FIELD': "email",
     'USER_CREATE_PASSWORD_RETYPE': True,
     "USERNAME_CHANGED_EMAIL_CONFIRMATION": True,
