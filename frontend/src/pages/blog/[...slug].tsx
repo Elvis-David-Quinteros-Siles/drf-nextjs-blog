@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import parse, { DOMNode, Element } from 'html-react-parser';
 import { GetServerSideProps, GetServerSidePropsContext, InferGetServerSidePropsType } from 'next';
-import { ArrowLeftIcon, ClockIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, ClockIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import EmailInput from '@/components/cta/EmailInput';
 import CommentsSection from '@/components/pages/blog/comments/CommentsSection';
 import Like from '@/components/pages/blog/Like';
@@ -10,13 +10,17 @@ import PostsList from '@/components/pages/blog/PostsList';
 import ReadingProgress from '@/components/pages/blog/ReadingProgress';
 import Share from '@/components/pages/blog/Share';
 import TableOfContents from '@/components/pages/blog/TableOfContents';
+import JsonLd from '@/components/JsonLd';
+import SeriesNav from '@/components/pages/blog/SeriesNav';
+import TagList from '@/components/pages/blog/TagList';
 import SEO from '@/components/SEO';
 import Avatar from '@/components/ui/Avatar';
 import Layout from '@/hocs/Layout';
 import usePosts from '@/hooks/usePosts';
 import { IPost } from '@/interfaces/blog/IPost';
+import { ITag } from '@/interfaces/blog/ITaxonomy';
 import { formatDate, readingTime } from '@/utils/format';
-import { SITE_URL } from '@/utils/site';
+import { SITE_NAME, SITE_URL } from '@/utils/site';
 
 export const getServerSideProps: GetServerSideProps = async (
   context: GetServerSidePropsContext,
@@ -119,8 +123,52 @@ export default function Page({
         author={author?.name}
         image={post?.thumbnail?.url}
         type="article"
+        robots={post?.status === 'published' ? 'index, follow' : 'noindex'}
       />
       <ReadingProgress targetId="articulo" />
+      <JsonLd
+        data={{
+          '@context': 'https://schema.org',
+          '@graph': [
+            {
+              '@type': 'BlogPosting',
+              headline: post?.title,
+              description: post?.description,
+              image: post?.thumbnail?.url ? [post.thumbnail.url] : undefined,
+              datePublished: post?.created_at,
+              dateModified: post?.updated_at,
+              author: { '@type': 'Person', name: author?.name, url: `${SITE_URL}/@/${post?.user}` },
+              publisher: { '@type': 'Organization', name: SITE_NAME, logo: { '@type': 'ImageObject', url: `${SITE_URL}/brand/logo-mark.png` } },
+              mainEntityOfPage: `${SITE_URL}/blog/${post?.slug}`,
+              articleSection: post?.category?.name,
+              keywords: post?.tags?.map((t: ITag) => t.name).join(', '),
+              wordCount: post?.content?.replace(/<[^>]+>/g, ' ').split(/\s+/).filter(Boolean).length,
+              inLanguage: 'es',
+              ...(post?.series && { isPartOf: { '@type': 'CreativeWorkSeries', name: post.series.title, url: `${SITE_URL}/series/${post.series.slug}` } }),
+            },
+            {
+              '@type': 'BreadcrumbList',
+              itemListElement: [
+                { '@type': 'ListItem', position: 1, name: 'Blog', item: `${SITE_URL}/blog` },
+                { '@type': 'ListItem', position: 2, name: post?.category?.name, item: `${SITE_URL}/category/${post?.category?.slug}` },
+                { '@type': 'ListItem', position: 3, name: post?.title },
+              ],
+            },
+          ],
+        }}
+      />
+
+      {post?.status !== 'published' && (
+        <div className="border-b border-amber-200 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/10">
+          <p className="container-page flex items-center gap-2 py-3 text-sm font-medium text-amber-800 dark:text-amber-200">
+            <EyeSlashIcon className="size-5 shrink-0" aria-hidden="true" />
+            Vista previa de un borrador: solo tú puedes ver esta página.
+            <Link href={`/profile/posts/edit/${post?.slug}`} className="ml-auto shrink-0 underline">
+              Seguir editando
+            </Link>
+          </p>
+        </div>
+      )}
 
       <article id="articulo">
         {/* Cabecera */}
@@ -185,6 +233,11 @@ export default function Page({
             }`}
           >
             <div className="min-w-0">
+              {post?.series && (
+                <div className="mb-8">
+                  <SeriesNav series={post.series} currentSlug={post.slug} variant="box" />
+                </div>
+              )}
               {hasToc && (
                 <div className="mb-8 lg:hidden">
                   <TableOfContents headings={headings} variant="mobile" />
@@ -194,6 +247,18 @@ export default function Page({
                 {content}
               </div>
 
+              {post?.tags?.length > 0 && (
+                <div className="mt-10">
+                  <TagList tags={post.tags} />
+                </div>
+              )}
+
+              {post?.series && (
+                <div className="mt-10">
+                  <SeriesNav series={post.series} currentSlug={post.slug} variant="pager" />
+                </div>
+              )}
+
               <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-gray-200 pt-6 dark:border-dark-third">
                 <div className="flex items-center gap-3">
                   <Like post={post} />
@@ -202,9 +267,11 @@ export default function Page({
                 <Share post={post} />
               </div>
 
-              <div className="mt-12 border-t border-gray-200 pt-10 dark:border-dark-third">
-                <CommentsSection postSlug={post.slug} postAuthor={post.user} />
-              </div>
+              {post?.status === 'published' && (
+                <div className="mt-12 border-t border-gray-200 pt-10 dark:border-dark-third">
+                  <CommentsSection postSlug={post.slug} postAuthor={post.user} />
+                </div>
+              )}
             </div>
 
             {hasToc && (

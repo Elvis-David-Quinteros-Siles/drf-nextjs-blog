@@ -10,7 +10,10 @@ from .models import (
     Comment,
     PostLike,
     PostShare,
-    PostView
+    PostView,
+    Tag,
+    Series,
+    CommentReport,
 )
 
 
@@ -159,3 +162,20 @@ class PostViewAdmin(admin.ModelAdmin):
             "fields": ("timestamp",)
         }),
     )
+
+@admin.register(Tag)
+class TagAdmin(admin.ModelAdmin):
+    list_display = ("name", "slug")
+    search_fields = ("name", "slug")
+
+
+@admin.register(Series)
+class SeriesAdmin(admin.ModelAdmin):
+    list_display = ("title", "user", "slug", "created_at")
+    search_fields = ("title", "slug")
+
+
+@admin.register(CommentReport)
+class CommentReportAdmin(admin.ModelAdmin):
+    list_display = ("comment", "user", "reason", "resolved", "created_at")
+    list_filter = ("reason", "resolved")

@@ -2,6 +2,7 @@ import { IUser } from '../auth/IUser';
 import { IMedia } from '../media/IMedia';
 import { ICategory, ICategoryList } from './ICategory';
 import { IHeading } from './IHeading';
+import { ISeries, ITag } from './ITaxonomy';
 
 export interface IPost {
   id: string;
@@ -21,6 +22,9 @@ export interface IPost {
   comments_count: number;
   has_liked: boolean;
   likes_count: number;
+  tags: ITag[];
+  series: ISeries | null;
+  series_order: number;
 }
 
 export interface IPostList {
@@ -35,4 +39,5 @@ export interface IPostList {
   view_count: string;
   user: IUser;
   status: string;
+  tags?: ITag[];
 }

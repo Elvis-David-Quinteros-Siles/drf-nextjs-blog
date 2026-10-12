@@ -11,7 +11,7 @@ import verifyAccess from '@/utils/api/auth/VerifyAccess';
 
 export const getServerSideProps: GetServerSideProps = async (context: GetServerSidePropsContext) => {
   const slug = String(context.params?.slug || '');
-  const { verified } = await verifyAccess(context);
+  const { verified, accessToken } = await verifyAccess(context);
   if (!verified) {
     return { redirect: { destination: `/login?next=/profile/posts/edit/${slug}`, permanent: false } };
   }
@@ -19,7 +19,12 @@ export const getServerSideProps: GetServerSideProps = async (context: GetServerS
   let post: IPost | null = null;
   try {
     const apiRes = await fetch(`${process.env.API_URL}/api/blog/post/get/?slug=${encodeURIComponent(slug)}`, {
-      headers: { Accept: 'application/json', 'API-Key': `${process.env.BACKEND_API_KEY}` },
+      // Con la sesión del autor: el backend solo entrega borradores a su dueño
+      headers: {
+        Accept: 'application/json',
+        'API-Key': `${process.env.BACKEND_API_KEY}`,
+        Authorization: `JWT ${accessToken}`,
+      },
     });
     if (apiRes.status === 200) {
       post = (await apiRes.json()).results;

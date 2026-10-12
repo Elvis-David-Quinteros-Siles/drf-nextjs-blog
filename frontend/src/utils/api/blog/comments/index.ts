@@ -1,4 +1,4 @@
-import { IComment, ICommentPage } from '@/interfaces/blog/IComment';
+import { IComment, ICommentPage, IReportedComment } from '@/interfaces/blog/IComment';
 
 const BASE = '/api/blog/comments';
 
@@ -42,6 +42,25 @@ export async function updateComment(commentId: string, content: string): Promise
 
 export async function deleteComment(commentId: string): Promise<void> {
   await request('delete', { method: 'DELETE', query: { comment_id: commentId } });
+}
+
+export async function moderateComment(commentId: string, action: 'hide' | 'show'): Promise<IComment> {
+  return (await request('moderate', { method: 'POST', body: JSON.stringify({ comment_id: commentId, action }) }))
+    .results;
+}
+
+export async function reportComment(commentId: string, reason: string, details = ''): Promise<string> {
+  return (
+    await request('report', { method: 'POST', body: JSON.stringify({ comment_id: commentId, reason, details }) })
+  ).results;
+}
+
+export async function listReportedComments(page = 1): Promise<{ results: IReportedComment[]; count: number; next: string | null }> {
+  return request('reports', { method: 'GET', query: { p: page, page_size: 20 } });
+}
+
+export async function dismissReports(commentId: string): Promise<void> {
+  await request('dismiss', { method: 'POST', body: JSON.stringify({ comment_id: commentId }) });
 }
 
 /** Texto plano del usuario → HTML seguro (párrafos y saltos de línea). */

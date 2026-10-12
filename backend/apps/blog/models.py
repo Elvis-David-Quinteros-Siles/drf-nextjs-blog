@@ -99,6 +99,38 @@ class CategoryAnalytics(models.Model):
             self.save()
 
 
+class Tag(models.Model):
+    """Etiqueta de un post. Se genera a partir de las palabras clave."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=60)
+    slug = models.SlugField(max_length=80, unique=True)
+
+    class Meta:
+        ordering = ("name",)
+
+    def __str__(self):
+        return self.name
+
+
+class Series(models.Model):
+    """Serie de artículos de un autor, leídos en orden."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="series")
+    title = models.CharField(max_length=128)
+    slug = models.SlugField(max_length=140, unique=True)
+    description = models.CharField(max_length=300, blank=True, default="")
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name_plural = "series"
+
+    def __str__(self):
+        return self.title
+
+
 class Post(models.Model):
 
     class PostObjects(models.Manager):
@@ -130,6 +162,9 @@ class Post(models.Model):
     slug = models.CharField(max_length=128, unique=True)
 
     category = models.ForeignKey(Category, on_delete=models.PROTECT)
+    tags = models.ManyToManyField(Tag, related_name="posts", blank=True)
+    series = models.ForeignKey(Series, on_delete=models.SET_NULL, related_name="posts", null=True, blank=True)
+    series_order = models.PositiveIntegerField(default=0)
 
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
@@ -175,6 +210,32 @@ class Comment(models.Model):
     
     def get_replies(self):
         return self.replies.filter(is_active=True)
+
+
+class CommentReport(models.Model):
+    """Reporte de un lector sobre un comentario, para moderación."""
+
+    REASONS = (
+        ("spam", "Spam o publicidad"),
+        ("offensive", "Ofensivo o acoso"),
+        ("off_topic", "Fuera de tema"),
+        ("other", "Otro motivo"),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    comment = models.ForeignKey(Comment, on_delete=models.CASCADE, related_name="reports")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="comment_reports")
+    reason = models.CharField(max_length=20, choices=REASONS, default="other")
+    details = models.CharField(max_length=300, blank=True, default="")
+    created_at = models.DateTimeField(default=timezone.now)
+    resolved = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ("-created_at",)
+        unique_together = ("comment", "user")
+
+    def __str__(self):
+        return f"{self.user} reportó {self.comment_id} ({self.reason})"
 
 
 class PostLike(models.Model):

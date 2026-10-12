@@ -3,7 +3,17 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useSelector } from 'react-redux';
 import moment from 'moment';
-import { ChatBubbleLeftIcon, ChevronDownIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
+import {
+  ChatBubbleLeftIcon,
+  ChevronDownIcon,
+  EllipsisHorizontalIcon,
+  EyeIcon,
+  EyeSlashIcon,
+  FlagIcon,
+  PencilIcon,
+  TrashIcon,
+} from '@heroicons/react/24/outline';
 import { ToastError } from '@/components/toast/alerts';
 import Avatar from '@/components/ui/Avatar';
 import { IComment } from '@/interfaces/blog/IComment';
@@ -12,12 +22,14 @@ import {
   deleteComment,
   htmlToText,
   listReplies,
+  moderateComment,
   replyToComment,
   textToHtml,
   updateComment,
 } from '@/utils/api/blog/comments';
 import sanitizeContent from '@/utils/sanitizeContent';
 import CommentForm from './CommentForm';
+import ReportDialog from './ReportDialog';
 
 /** A partir de esta profundidad las respuestas ya no se sangran más (columnas estrechas en móvil). */
 const MAX_INDENT_DEPTH = 3;
@@ -26,6 +38,8 @@ interface ComponentProps {
   comment: IComment;
   postAuthor: string;
   depth?: number;
+  /** El usuario actual modera este artículo (admin, moderador o autor del post) */
+  canModerate?: boolean;
   onDeleted: (id: string) => void;
   /** Avisa a la sección de que la conversación ganó o perdió comentarios */
   onCountChange?: (delta: number) => void;
@@ -35,6 +49,7 @@ export default function CommentItem({
   comment: initial,
   postAuthor,
   depth = 0,
+  canModerate = false,
   onDeleted,
   onCountChange = () => {},
 }: ComponentProps) {
@@ -52,12 +67,19 @@ export default function CommentItem({
   const [replying, setReplying] = useState<boolean>(false);
   const [editing, setEditing] = useState<boolean>(false);
   const [confirmDelete, setConfirmDelete] = useState<boolean>(false);
+  const [reporting, setReporting] = useState<boolean>(false);
 
   const { author } = comment;
   const name =
-    [author?.first_name, author?.last_name].filter(Boolean).join(' ') || author?.username || comment.user;
+    [author?.first_name, author?.last_name].filter(Boolean).join(' ') ||
+    author?.username ||
+    comment.user ||
+    'Comentario oculto';
   const username = author?.username || comment.user;
-  const isMine = me?.username === username;
+  const isMine = Boolean(me?.username) && me?.username === username;
+  const hidden = !comment.is_active;
+  // Oculto y sin permisos de moderación: solo se ve el aviso
+  const placeholder = hidden && !canModerate;
   const edited = moment(comment.updated_at).diff(moment(comment.created_at), 'seconds') > 60;
 
   const requireLogin = () => {
@@ -112,6 +134,14 @@ export default function CommentItem({
     }
   };
 
+  const handleModerate = async (action: 'hide' | 'show') => {
+    try {
+      setComment(await moderateComment(comment.id, action));
+    } catch (e) {
+      ToastError('No se pudo moderar el comentario');
+    }
+  };
+
   const handleDelete = async () => {
     try {
       await deleteComment(comment.id);
@@ -128,15 +158,31 @@ export default function CommentItem({
   return (
     <article id={`comentario-${comment.id}`} className="scroll-mt-24">
       <div className="flex gap-3">
-        <Link href={`/@/${username}`} className="shrink-0">
-          <Avatar name={name} src={author?.profile_picture?.url} className={depth > 0 ? 'size-8' : 'size-10'} />
-        </Link>
+        {placeholder ? (
+          <span
+            aria-hidden="true"
+            className={`${depth > 0 ? 'size-8' : 'size-10'} shrink-0 rounded-full bg-gray-100 dark:bg-dark-second`}
+          />
+        ) : (
+          <Link href={`/@/${username}`} className="shrink-0">
+            <Avatar name={name} src={author?.profile_picture?.url} className={depth > 0 ? 'size-8' : 'size-10'} />
+          </Link>
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
-            <Link href={`/@/${username}`} className="font-semibold text-gray-900 hover:text-indigo-600 dark:text-white dark:hover:text-indigo-300">
-              {name}
-            </Link>
-            {username === postAuthor && (
+            {placeholder ? (
+              <span className="font-semibold text-gray-400 dark:text-gray-500">{name}</span>
+            ) : (
+              <Link href={`/@/${username}`} className="font-semibold text-gray-900 hover:text-indigo-600 dark:text-white dark:hover:text-indigo-300">
+                {name}
+              </Link>
+            )}
+            {hidden && canModerate && (
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+                Oculto
+              </span>
+            )}
+            {!placeholder && username === postAuthor && (
               <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">
                 Autor
               </span>
@@ -151,7 +197,13 @@ export default function CommentItem({
             </time>
           </div>
 
-          {editing ? (
+          {placeholder && (
+            <p className="mt-1 text-sm italic text-gray-500 dark:text-gray-400">
+              Este comentario fue ocultado por moderación.
+            </p>
+          )}
+
+          {!placeholder && editing ? (
             <div className="mt-2">
               <CommentForm
                 initialValue={htmlToText(comment.content)}
@@ -163,24 +215,28 @@ export default function CommentItem({
               />
             </div>
           ) : (
+            !placeholder && (
             <div
               className="prose prose-sm prose-gray mt-1 max-w-none break-words dark:prose-invert prose-p:my-1.5"
               // El contenido viene saneado del backend y se vuelve a sanear aquí
               // eslint-disable-next-line react/no-danger
               dangerouslySetInnerHTML={{ __html: sanitizeContent(comment.content) }}
             />
+            )
           )}
 
           {!editing && (
             <div className="-ml-2 mt-1 flex flex-wrap items-center gap-1">
-              <button
-                type="button"
-                onClick={() => (isAuthenticated ? setReplying(!replying) : requireLogin())}
-                className={actionClass}
-              >
-                <ChatBubbleLeftIcon className="size-4" aria-hidden="true" />
-                Responder
-              </button>
+              {!placeholder && (
+                <button
+                  type="button"
+                  onClick={() => (isAuthenticated ? setReplying(!replying) : requireLogin())}
+                  className={actionClass}
+                >
+                  <ChatBubbleLeftIcon className="size-4" aria-hidden="true" />
+                  Responder
+                </button>
+              )}
               {repliesCount > 0 && (
                 <button type="button" onClick={toggleReplies} aria-expanded={showReplies} className={actionClass}>
                   <ChevronDownIcon
@@ -203,6 +259,55 @@ export default function CommentItem({
                     Eliminar
                   </button>
                 </>
+              )}
+              {isAuthenticated && !placeholder && (!isMine || canModerate) && (
+                <Menu as="div" className="relative">
+                  <MenuButton className={actionClass} aria-label="Más acciones">
+                    <EllipsisHorizontalIcon className="size-4" aria-hidden="true" />
+                  </MenuButton>
+                  <MenuItems
+                    transition
+                    anchor="bottom start"
+                    className="z-30 mt-1 w-48 rounded-xl bg-white p-1 text-sm shadow-lg ring-1 ring-black/5 transition focus:outline-none data-[closed]:scale-95 data-[closed]:opacity-0 dark:bg-dark-bg dark:ring-dark-third"
+                  >
+                    {!isMine && (
+                      <MenuItem>
+                        <button
+                          type="button"
+                          onClick={() => setReporting(true)}
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left data-[focus]:bg-gray-100 dark:data-[focus]:bg-dark-second"
+                        >
+                          <FlagIcon className="size-4" aria-hidden="true" />
+                          Reportar
+                        </button>
+                      </MenuItem>
+                    )}
+                    {canModerate && (
+                      <MenuItem>
+                        <button
+                          type="button"
+                          onClick={() => handleModerate(hidden ? 'show' : 'hide')}
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left data-[focus]:bg-gray-100 dark:data-[focus]:bg-dark-second"
+                        >
+                          {hidden ? <EyeIcon className="size-4" aria-hidden="true" /> : <EyeSlashIcon className="size-4" aria-hidden="true" />}
+                          {hidden ? 'Mostrar' : 'Ocultar'}
+                        </button>
+                      </MenuItem>
+                    )}
+                    {canModerate && !isMine && (
+                      <MenuItem>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDelete(true)}
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-rose-600 data-[focus]:bg-rose-50 dark:text-rose-400 dark:data-[focus]:bg-rose-500/10"
+                        >
+                          <TrashIcon className="size-4" aria-hidden="true" />
+                          Eliminar
+                        </button>
+                      </MenuItem>
+                    )}
+                  </MenuItems>
+                </Menu>
               )}
               {confirmDelete && (
                 <span className="flex flex-wrap items-center gap-2 rounded-lg bg-rose-50 px-2 py-1 text-xs text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
@@ -247,6 +352,7 @@ export default function CommentItem({
               comment={reply}
               postAuthor={postAuthor}
               depth={depth + 1}
+              canModerate={canModerate}
               onCountChange={onCountChange}
               onDeleted={(id) => {
                 setReplies((prev) => prev.filter((r) => r.id !== id));
@@ -263,11 +369,14 @@ export default function CommentItem({
           )}
         </div>
       )}
+
+      {reporting && <ReportDialog commentId={comment.id} open={reporting} onClose={() => setReporting(false)} />}
     </article>
   );
 }
 
 CommentItem.defaultProps = {
   depth: 0,
+  canModerate: false,
   onCountChange: () => {},
 };

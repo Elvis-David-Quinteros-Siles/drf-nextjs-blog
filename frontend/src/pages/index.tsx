@@ -4,6 +4,7 @@ import EmailInput from '@/components/cta/EmailInput';
 import PostCard from '@/components/pages/blog/PostCard';
 import PostsList from '@/components/pages/blog/PostsList';
 import CategoriesBar from '@/components/pages/categories/CategoriesBar';
+import JsonLd from '@/components/JsonLd';
 import SEO from '@/components/SEO';
 import LoadingPostCard from '@/components/loaders/LoadingPostCard';
 import Layout from '@/hocs/Layout';
@@ -24,6 +25,21 @@ export default function Home() {
   return (
     <>
       <SEO title={SITE_NAME} description={SITE_DESCRIPTION} href={`${SITE_URL}/`} />
+      <JsonLd
+        data={{
+          '@context': 'https://schema.org',
+          '@type': 'WebSite',
+          name: SITE_NAME,
+          url: SITE_URL,
+          inLanguage: 'es',
+          description: SITE_DESCRIPTION,
+          potentialAction: {
+            '@type': 'SearchAction',
+            target: `${SITE_URL}/search/{search_term_string}`,
+            'query-input': 'required name=search_term_string',
+          },
+        }}
+      />
 
       {/* Hero */}
       <section className="relative overflow-hidden border-b border-gray-200 dark:border-dark-third">

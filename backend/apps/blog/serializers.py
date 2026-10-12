@@ -5,6 +5,9 @@ from apps.authentication.serializers import UserPublicSerializer
 from .models import (
     Post, 
     Category, 
+    Tag,
+    Series,
+    CommentReport,
     Heading, 
     PostView, 
     PostInteraction, 
@@ -16,6 +19,37 @@ from .models import (
 )
 from apps.media.serializers import MediaSerializer
 from apps.authentication.serializers import UserPublicSerializer
+
+class TagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Tag
+        fields = ["name", "slug"]
+
+
+class SeriesSerializer(serializers.ModelSerializer):
+    """Serie con la lista ordenada de sus artículos publicados (para navegar entre partes)."""
+    posts = serializers.SerializerMethodField()
+    author = UserPublicSerializer(source="user", read_only=True)
+
+    class Meta:
+        model = Series
+        fields = ["id", "title", "slug", "description", "author", "posts"]
+
+    def get_posts(self, obj):
+        posts = obj.posts.filter(status="published").order_by("series_order", "created_at")
+        return [{"title": p.title, "slug": p.slug, "order": p.series_order} for p in posts]
+
+
+class SeriesBriefSerializer(serializers.ModelSerializer):
+    posts_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Series
+        fields = ["id", "title", "slug", "description", "posts_count"]
+
+    def get_posts_count(self, obj):
+        return obj.posts.filter(status="published").count()
+
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -80,6 +114,8 @@ class PostSerializer(serializers.ModelSerializer):
     likes_count = serializers.SerializerMethodField()
     thumbnail = MediaSerializer()
     user = serializers.StringRelatedField()
+    tags = TagSerializer(many=True, read_only=True)
+    series = SeriesSerializer(read_only=True)
 
     class Meta:
         model = Post
@@ -98,8 +134,8 @@ class PostSerializer(serializers.ModelSerializer):
         """
         Verifica si el usuario autenticado ha dado 'like' al post.
         """
-        user = self.context.get('request').user
-        print(user)
+        request = self.context.get('request')
+        user = request.user if request else None
         if user and user.is_authenticated:
             return PostLike.objects.filter(post=obj, user=user).exists()
         return False
@@ -110,10 +146,12 @@ class PostListSerializer(serializers.ModelSerializer):
     view_count = serializers.SerializerMethodField()
     thumbnail = MediaSerializer()
     user = UserPublicSerializer()
+    tags = TagSerializer(many=True, read_only=True)
     
     class Meta:
         model = Post
         fields = [
+            "tags",
             "id",
             "title",
             "description",
@@ -217,7 +255,8 @@ class CommentSerializer(serializers.ModelSerializer):
         return CommentSerializer(replies, many=True).data
     
     def get_replies_count(self, obj):
-        return obj.replies.filter(is_active=True).count()
+        # Incluye respuestas ocultas: se muestran como "comentario oculto" para no romper el hilo
+        return obj.replies.count()
 
 
 class PostLikeSerializer(serializers.ModelSerializer):
@@ -245,3 +284,10 @@ class PostShareSerializer(serializers.ModelSerializer):
             "platform",
             "timestamp",
         ]
+
+class CommentReportSerializer(serializers.ModelSerializer):
+    user = serializers.StringRelatedField()
+
+    class Meta:
+        model = CommentReport
+        fields = ["id", "user", "reason", "details", "created_at"]

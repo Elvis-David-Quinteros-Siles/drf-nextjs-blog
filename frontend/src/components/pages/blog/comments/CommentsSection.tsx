@@ -25,6 +25,7 @@ export default function CommentsSection({ postSlug, postAuthor }: ComponentProps
   const [comments, setComments] = useState<IComment[]>([]);
   // Total de la conversación (comentarios + respuestas), para el título
   const [total, setTotal] = useState<number>(0);
+  const [canModerate, setCanModerate] = useState<boolean>(false);
   const [next, setNext] = useState<string | null>(null);
   const [page, setPage] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(true);
@@ -36,6 +37,7 @@ export default function CommentsSection({ postSlug, postAuthor }: ComponentProps
         const data = await listComments(postSlug, p);
         setComments((prev) => (p === 1 ? data.results : [...prev, ...data.results]));
         setTotal(data.extra_data?.total ?? data.count);
+        setCanModerate(Boolean(data.extra_data?.can_moderate));
         setNext(data.next);
         setPage(p);
       } catch (e) {
@@ -121,6 +123,7 @@ export default function CommentsSection({ postSlug, postAuthor }: ComponentProps
             key={comment.id}
             comment={comment}
             postAuthor={postAuthor}
+            canModerate={canModerate}
             onCountChange={(delta) => setTotal((n) => Math.max(0, n + delta))}
             onDeleted={(id) => {
               setComments((prev) => prev.filter((c) => c.id !== id));

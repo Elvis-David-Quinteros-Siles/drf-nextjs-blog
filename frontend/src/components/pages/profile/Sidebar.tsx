@@ -1,7 +1,12 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useSelector } from 'react-redux';
-import { DocumentTextIcon, FingerPrintIcon, UserCircleIcon } from '@heroicons/react/24/outline';
+import {
+  DocumentTextIcon,
+  FingerPrintIcon,
+  ShieldCheckIcon,
+  UserCircleIcon,
+} from '@heroicons/react/24/outline';
 import { RootState } from '@/redux/reducers';
 
 export default function Sidebar() {
@@ -18,6 +23,12 @@ export default function Sidebar() {
             href: '/profile/posts',
             icon: DocumentTextIcon,
             match: (p: string) => p.startsWith('/profile/posts'),
+          },
+          {
+            name: 'Moderación',
+            href: '/profile/moderation',
+            icon: ShieldCheckIcon,
+            match: (p: string) => p === '/profile/moderation',
           },
         ]
       : []),

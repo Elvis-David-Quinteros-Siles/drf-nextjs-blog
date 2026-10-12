@@ -10,6 +10,9 @@ export interface CreatePostProps {
   thumbnail_size?: string | null;
   thumbnail_type?: string | null;
   thumbnail_key?: string | null;
+  /** slug de una serie del autor; '' la quita */
+  series?: string;
+  series_order?: number;
 }
 
 export default async function createPost(props: CreatePostProps) {

@@ -27,5 +27,19 @@ export interface ICommentPage {
   count: number;
   next: string | null;
   /** Solo en la lista principal: comentarios + respuestas */
-  extra_data?: { total: number };
+  extra_data?: { total: number; can_moderate?: boolean };
+}
+
+export interface ICommentReport {
+  id: string;
+  user: string;
+  reason: 'spam' | 'offensive' | 'off_topic' | 'other';
+  details: string;
+  created_at: string;
+}
+
+export interface IReportedComment extends IComment {
+  post_slug: string;
+  post_title: string;
+  reports: ICommentReport[];
 }

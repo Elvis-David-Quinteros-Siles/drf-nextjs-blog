@@ -5,7 +5,7 @@ from django.conf import settings
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from django.core.cache import cache
-from django.db.models import Q, F, Prefetch, Value
+from django.db.models import Count, Q, F, Prefetch, Value
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 import redis
@@ -24,9 +24,23 @@ from .models import (
     PostInteraction, 
     Comment,
     PostLike,
-    PostShare
+    PostShare,
+    Tag,
+    Series,
+    CommentReport,
 )
-from .serializers import CategorySerializer, PostListSerializer, PostSerializer, HeadingSerializer, CategoryListSerializer, CommentSerializer
+from .serializers import (
+    CategorySerializer,
+    PostListSerializer,
+    PostSerializer,
+    HeadingSerializer,
+    CategoryListSerializer,
+    CommentSerializer,
+    CommentReportSerializer,
+    SeriesBriefSerializer,
+    SeriesSerializer,
+)
+from .tags import sync_post_tags
 from utils.ip_utils import get_client_ip
 from apps.authentication.models import UserAccount
 from apps.media.models import Media
@@ -35,6 +49,56 @@ from utils.string_utils import sanitize_string, sanitize_html
 import uuid
 from django.utils.text import slugify
 
+
+
+MODERATOR_ROLES = ("admin", "moderator")
+AUTO_HIDE_REPORTS = 3  # reportes distintos sin resolver que ocultan un comentario automáticamente
+
+
+def can_moderate(user, post):
+    """Moderan los comentarios de un post: staff, roles admin/moderator y el autor del post."""
+    if not user or not user.is_authenticated:
+        return False
+    return user.is_staff or getattr(user, "role", None) in MODERATOR_ROLES or post.user_id == user.id
+
+
+def mask_hidden_comments(serialized, moderator):
+    """
+    Los comentarios ocultos siguen en la lista (para no romper los hilos), pero
+    sin contenido ni autor salvo para quien modera.
+    """
+    result = []
+    for item in serialized:
+        item = dict(item)
+        if not item.get("is_active", True) and not moderator:
+            item.update({"content": "", "author": None, "user": ""})
+        result.append(item)
+    return result
+
+
+def invalidate_post_caches(slug=None):
+    """Listados de posts y, si se indica, el detalle de un post."""
+    for key in cache.keys("post_list:*"):
+        cache.delete(key)
+    if slug:
+        cache.delete(f"post_detail:{slug}")
+
+
+def assign_series(post, user, series_slug, series_order):
+    """Asigna la serie indicada si pertenece al autor; vacío la quita."""
+    if series_slug is None:
+        return
+    if series_slug == "":
+        post.series = None
+        post.series_order = 0
+        return
+    series = Series.objects.filter(slug=series_slug, user=user).first()
+    if series:
+        post.series = series
+        try:
+            post.series_order = max(0, int(series_order or 0))
+        except (TypeError, ValueError):
+            post.series_order = 0
 
 
 def invalidate_comment_caches(comment):
@@ -108,6 +172,10 @@ class DetailPostView(StandardAPIView):
         try:
             post = Post.objects.get(slug=slug)
         except Post.DoesNotExist:
+            raise NotFound(detail=f"No post found for {slug}")
+
+        # Los borradores solo los ve su autor (antes cualquiera con la URL)
+        if post.status != "published" and post.user != request.user:
             raise NotFound(detail=f"No post found for {slug}")
         
         serialized_post = PostSerializer(post, context={'request': request}).data
@@ -218,6 +286,12 @@ class PostAuthorViews(StandardAPIView):
                     order=order,
                 )
 
+            # Etiquetas (desde las palabras clave) y serie
+            sync_post_tags(post)
+            assign_series(post, user, request.data.get("series"), request.data.get("series_order"))
+            post.save()
+            invalidate_post_caches(post.slug)
+
         except Exception as e:
             return self.error(f"An error occurred: {str(e)}")
         
@@ -305,7 +379,13 @@ class PostAuthorViews(StandardAPIView):
                 order=order,
             )
 
+        assign_series(post, user, request.data.get("series"), request.data.get("series_order"))
         post.save()
+        sync_post_tags(post)
+
+        # Antes los cambios tardaban hasta 5 minutos en verse por la caché
+        invalidate_post_caches(post_slug)
+        invalidate_post_caches(post.slug)
 
         serialized_post = PostSerializer(post, context={'request': request}).data
 
@@ -331,30 +411,9 @@ class PostAuthorViews(StandardAPIView):
         
         post.delete()
 
-        # Invalidar caché relacionado con este post
-        self._invalidate_post_list_cache()
-        self._invalidate_post_detail_cache(post_slug)
+        invalidate_post_caches(post_slug)
         
         return self.response(f"Post with slug {post_slug} deleted successully.")
-
-    def _invalidate_post_list_cache(self):
-        """
-        Invalida las claves de caché relacionadas con la lista de posts.
-        """
-        # Obtén todas las claves de caché activas relacionadas con los posts
-        cache_keys = cache.keys("post_list:*")  # Asume que todas las claves inician con 'post_list:'
-
-        # Eliminar todas las claves relacionadas
-        for key in cache_keys:
-            cache.delete(key)
-    
-    def _invalidate_post_detail_cache(self, slug):
-        """
-        Invalida el cache del post.
-        """
-        cache_key = f"post_detail:{slug}"
-        cache.delete(cache_key)
-
 
 class PostListView(StandardAPIView):
     permission_classes = [HasValidAPIKey]
@@ -368,10 +427,12 @@ class PostListView(StandardAPIView):
             author = request.query_params.get("author", None)
             is_featured = request.query_params.get("is_featured", None)
             categories = request.query_params.getlist("categories", [])
+            tag = request.query_params.get("tag", None)
+            series = request.query_params.get("series", None)
             page = request.query_params.get("p", "1")
 
             # Construir clave de cache para resultados paginados
-            cache_key = f"post_list:{search}:{sorting}:{ordering}:{author}:{categories}:{is_featured}:{page}"
+            cache_key = f"post_list:{search}:{sorting}:{ordering}:{author}:{categories}:{is_featured}:{tag}:{series}:{page}"
             cached_posts = cache.get(cache_key)
             if cached_posts:
                 # Serializar los datos del caché
@@ -382,7 +443,7 @@ class PostListView(StandardAPIView):
                 return self.paginate(request, serialized_posts)
 
             # Consulta inicial optimizada con nombres de anotación únicos
-            posts = Post.postobjects.all().select_related("category").annotate(
+            posts = Post.postobjects.all().select_related("category").prefetch_related("tags").annotate(
                 analytics_views=Coalesce(F("post_analytics__views"), Value(0)),
                 analytics_likes=Coalesce(F("post_analytics__likes"), Value(0)),
                 analytics_comments=Coalesce(F("post_analytics__comments"), Value(0)),
@@ -392,6 +453,12 @@ class PostListView(StandardAPIView):
             # Filtrar por autor
             if author:
                 posts = posts.filter(user__username=author)
+
+            # Filtrar por etiqueta y por serie
+            if tag:
+                posts = posts.filter(tags__slug=tag)
+            if series:
+                posts = posts.filter(series__slug=series).order_by("series_order", "created_at")
 
             # Si no hay posts del autor, responder inmediatamente
             if not posts.exists():
@@ -478,7 +545,7 @@ class PostDetailView(StandardAPIView):
             # Verificar si los datos están en caché
             cache_key = f"post_detail:{slug}"
             cached_post = cache.get(cache_key)
-            if cached_post:
+            if cached_post and cached_post.status == "published":
                 serialized_post = PostSerializer(cached_post, context={'request': request}).data
                 self._register_view_interaction(cached_post, ip_address, user)
                 return self.response(serialized_post)
@@ -489,6 +556,12 @@ class PostDetailView(StandardAPIView):
             except Post.DoesNotExist:
                 raise NotFound(f"Post {slug} does not exist.")
 
+            # Un borrador solo lo puede previsualizar su autor; no se cachea ni cuenta vistas
+            if post.status != "published":
+                if user is None or post.user_id != user.id:
+                    raise NotFound(f"Post {slug} does not exist.")
+                return self.response(PostSerializer(post, context={'request': request}).data)
+
             serialized_post = PostSerializer(post, context={'request': request}).data
 
             # Guardar en el caché
@@ -498,7 +571,7 @@ class PostDetailView(StandardAPIView):
             self._register_view_interaction(post, ip_address, user)
             
 
-        except Post.DoesNotExist:
+        except (Post.DoesNotExist, NotFound):
             raise NotFound(detail="The requested post does not exist")
         except Exception as e:
             raise APIException(detail=f"An unexpected error occurred: {str(e)}")
@@ -731,17 +804,20 @@ class ListPostCommentsView(StandardAPIView):
 
         # Definir clave cache
         cache_key = f"post_comments:{post_slug}:{page}"
-        cached = cache.get(cache_key)
-        if isinstance(cached, dict):
-            return self.paginate_with_extra(request, cached["comments"], {"total": cached["total"]})
-
         try:
             post = Post.objects.get(slug=post_slug)
         except Post.DoesNotExist:
             raise NotFound(detail=f"Post: {post_slug} does not exist")
+        moderator = can_moderate(request.user, post)
 
-        # Comentarios principales; "total" cuenta también las respuestas
-        comments = Comment.objects.filter(post=post, parent=None, is_active=True)
+        cached = cache.get(cache_key)
+        if isinstance(cached, dict):
+            return self.paginate_with_extra(
+                request, mask_hidden_comments(cached["comments"], moderator), {"total": cached["total"], "can_moderate": moderator}
+            )
+
+        # Comentarios principales (los ocultos quedan como marcador); "total" cuenta los visibles con respuestas
+        comments = Comment.objects.filter(post=post, parent=None).select_related("user")
         total = Comment.objects.filter(post=post, is_active=True).count()
 
         serialized_comments = CommentSerializer(comments, many=True).data
@@ -755,7 +831,9 @@ class ListPostCommentsView(StandardAPIView):
         # Almacenar los datos en caché
         cache.set(cache_key, {"comments": serialized_comments, "total": total}, timeout=60 * 5)
 
-        return self.paginate_with_extra(request, serialized_comments, {"total": total})
+        return self.paginate_with_extra(
+            request, mask_hidden_comments(serialized_comments, moderator), {"total": total, "can_moderate": moderator}
+        )
 
 
 class PostCommentViews(StandardAPIView):
@@ -829,8 +907,12 @@ class PostCommentViews(StandardAPIView):
             raise NotFound(detail="A valid comment id must be provided")
         
         try:
-            comment = Comment.objects.get(id=comment_id, user=request.user)
+            comment = Comment.objects.select_related("post").get(id=comment_id)
         except Comment.DoesNotExist:
+            raise NotFound(detail=f"Comment with id: {comment_id} does not exist")
+
+        # Puede borrarlo su autor o quien modera el post
+        if comment.user_id != request.user.id and not can_moderate(request.user, comment.post):
             raise NotFound(detail=f"Comment with id: {comment_id} does not exist")
         
         post = comment.post
@@ -876,18 +958,20 @@ class ListCommentRepliesView(StandardAPIView):
         
         # Definir la clave cache
         cache_key = f"comment_replies:{comment_id}:{page}"
-        cached_replies = cache.get(cache_key)
-        if cached_replies:
-            return self.paginate(request, cached_replies)
-        
+
         # Obtener el comentario padre
         try:
-            parent_comment = Comment.objects.get(id=comment_id)
+            parent_comment = Comment.objects.select_related("post").get(id=comment_id)
         except Comment.DoesNotExist:
             raise NotFound(detail=f"Comment with id: {comment_id} does not exist")
-        
-        # Filtrar las respuestas activas del comentario padre
-        replies = parent_comment.replies.filter(is_active=True).order_by("created_at")
+        moderator = can_moderate(request.user, parent_comment.post)
+
+        cached_replies = cache.get(cache_key)
+        if cached_replies:
+            return self.paginate(request, mask_hidden_comments(cached_replies, moderator))
+
+        # Respuestas en orden cronológico (las ocultas quedan como marcador)
+        replies = parent_comment.replies.select_related("user").order_by("created_at")
 
         # Serializar respuesta
         serialized_replies = CommentSerializer(replies, many=True).data
@@ -898,7 +982,7 @@ class ListCommentRepliesView(StandardAPIView):
         # Guardar las respuestas en el caché
         cache.set(cache_key, serialized_replies, timeout=60 * 5)
 
-        return self.paginate(request, serialized_replies)
+        return self.paginate(request, mask_hidden_comments(serialized_replies, moderator))
     
     def _register_comment_reply_cache_key(self, comment_id, cache_key):
         """
@@ -961,6 +1045,147 @@ class CommentReplyViews(StandardAPIView):
 
         analytics, _ = PostAnalytics.objects.get_or_create(post=post)
         analytics.increment_metric("comments")
+
+class CommentModerationView(StandardAPIView):
+    permission_classes = [HasValidAPIKey, permissions.IsAuthenticated]
+
+    def post(self, request):
+        """Ocultar o volver a mostrar un comentario (action: hide | show)."""
+        comment_id = request.data.get("comment_id")
+        action = request.data.get("action")
+        if action not in ("hide", "show"):
+            raise ValidationError("action debe ser 'hide' o 'show'.")
+
+        comment = Comment.objects.select_related("post").filter(id=comment_id).first()
+        if not comment or not can_moderate(request.user, comment.post):
+            raise NotFound(detail="Comment not found")
+
+        # update() en lugar de save(): moderar no debe marcar el comentario como "editado"
+        comment.is_active = action == "show"
+        Comment.objects.filter(pk=comment.pk).update(is_active=comment.is_active)
+        # Al decidir sobre el comentario, sus reportes quedan resueltos
+        comment.reports.filter(resolved=False).update(resolved=True)
+        invalidate_comment_caches(comment)
+        return self.response(CommentSerializer(comment).data)
+
+
+class CommentReportView(StandardAPIView):
+    permission_classes = [HasValidAPIKey, permissions.IsAuthenticated]
+
+    def post(self, request):
+        """Reportar un comentario. A los 3 reportes distintos sin resolver se oculta solo."""
+        comment = Comment.objects.select_related("post").filter(id=request.data.get("comment_id")).first()
+        if not comment:
+            raise NotFound(detail="Comment not found")
+        if comment.user_id == request.user.id:
+            raise ValidationError("No puedes reportar tu propio comentario.")
+
+        reason = request.data.get("reason", "other")
+        if reason not in dict(CommentReport.REASONS):
+            reason = "other"
+        _, created = CommentReport.objects.get_or_create(
+            comment=comment,
+            user=request.user,
+            defaults={"reason": reason, "details": sanitize_string(request.data.get("details", ""))[:300]},
+        )
+        if not created:
+            return self.response("Ya habías reportado este comentario.")
+
+        if comment.is_active and comment.reports.filter(resolved=False).count() >= AUTO_HIDE_REPORTS:
+            comment.is_active = False
+            Comment.objects.filter(pk=comment.pk).update(is_active=False)
+            invalidate_comment_caches(comment)
+
+        return self.response("Gracias, revisaremos el comentario.", status=status.HTTP_201_CREATED)
+
+
+class CommentReportsListView(StandardAPIView):
+    permission_classes = [HasValidAPIKey, permissions.IsAuthenticated]
+
+    def get(self, request):
+        """Comentarios con reportes pendientes que el usuario puede moderar."""
+        user = request.user
+        comments = Comment.objects.filter(reports__resolved=False).select_related("post", "user").distinct()
+        if not (user.is_staff or user.role in MODERATOR_ROLES):
+            comments = comments.filter(post__user=user)
+
+        data = []
+        for comment in comments.order_by("-created_at"):
+            reports = comment.reports.filter(resolved=False)
+            item = CommentSerializer(comment).data
+            item["post_slug"] = comment.post.slug
+            item["reports"] = CommentReportSerializer(reports, many=True).data
+            data.append(item)
+        return self.paginate(request, data)
+
+
+class CommentReportsDismissView(StandardAPIView):
+    permission_classes = [HasValidAPIKey, permissions.IsAuthenticated]
+
+    def post(self, request):
+        """Descartar los reportes de un comentario (se considera correcto)."""
+        comment = Comment.objects.select_related("post").filter(id=request.data.get("comment_id")).first()
+        if not comment or not can_moderate(request.user, comment.post):
+            raise NotFound(detail="Comment not found")
+        comment.reports.filter(resolved=False).update(resolved=True)
+        return self.response("Reportes descartados.")
+
+
+class TagListView(StandardAPIView):
+    permission_classes = [HasValidAPIKey]
+
+    def get(self, request):
+        """Etiquetas con al menos un post publicado, de más a menos usadas."""
+        tags = (
+            Tag.objects.filter(posts__status="published")
+            .annotate(posts_count=Count("posts", filter=Q(posts__status="published")))
+            .order_by("-posts_count", "name")
+            .distinct()
+        )
+        return self.response([{"name": t.name, "slug": t.slug, "posts_count": t.posts_count} for t in tags])
+
+
+class SeriesView(StandardAPIView):
+    permission_classes = [HasValidAPIKey]
+
+    def get(self, request):
+        """Detalle de una serie (?slug=) o listado de series con artículos publicados."""
+        slug = request.query_params.get("slug")
+        if slug:
+            series = Series.objects.filter(slug=slug).select_related("user").first()
+            if not series or not series.posts.filter(status="published").exists():
+                raise NotFound(detail="Series not found")
+            return self.response(SeriesSerializer(series).data)
+        series = Series.objects.filter(posts__status="published").distinct()
+        return self.response(SeriesBriefSerializer(series, many=True).data)
+
+
+class MySeriesView(StandardAPIView):
+    permission_classes = [HasValidAPIKey, permissions.IsAuthenticated]
+
+    def get(self, request):
+        """Series del autor, para elegirlas en el editor."""
+        return self.response(SeriesBriefSerializer(Series.objects.filter(user=request.user), many=True).data)
+
+    def post(self, request):
+        """Crear una serie nueva."""
+        if request.user.role == "customer":
+            return self.error("You do not have permission to create series")
+        title = sanitize_string(request.data.get("title", ""))[:128]
+        if not title:
+            raise ValidationError("La serie necesita un título.")
+        base = slugify(title)[:120] or "serie"
+        slug, n = base, 2
+        while Series.objects.filter(slug=slug).exists():
+            slug, n = f"{base}-{n}", n + 1
+        series = Series.objects.create(
+            user=request.user,
+            title=title,
+            slug=slug,
+            description=sanitize_string(request.data.get("description", ""))[:300],
+        )
+        return self.response(SeriesBriefSerializer(series).data, status=status.HTTP_201_CREATED)
+
 
 class PostLikeViews(StandardAPIView):
     permission_classes = [HasValidAPIKey, permissions.IsAuthenticated]

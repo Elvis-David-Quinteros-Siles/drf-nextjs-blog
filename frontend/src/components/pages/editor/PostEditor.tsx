@@ -6,10 +6,13 @@ import axios from 'axios';
 import { ArrowLeftIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline';
 
 import EditImage from '@/components/forms/EditImage';
+import TagInput from '@/components/forms/TagInput';
 import EditRichText from '@/components/forms/EditRichText';
 import { ToastError, ToastSuccess } from '@/components/toast/alerts';
 import Card from '@/components/ui/Card';
 import { ICategoryList } from '@/interfaces/blog/ICategory';
+import { ISeriesBrief } from '@/interfaces/blog/ITaxonomy';
+import { createSeries, listMySeries, listTags } from '@/utils/api/blog/meta';
 import { IPost } from '@/interfaces/blog/IPost';
 import { RootState } from '@/redux/reducers';
 import createPost, { CreatePostProps } from '@/utils/api/blog/post/create';
@@ -54,6 +57,12 @@ export default function PostEditor({ categories, loadingCategories, post }: Comp
   const [slugTouched, setSlugTouched] = useState<boolean>(isEdit);
   const [category, setCategory] = useState<string>(post?.category?.slug || '');
   const [status, setStatus] = useState<string>(post?.status || 'draft');
+  const [series, setSeries] = useState<string>(post?.series?.slug || '');
+  const [seriesOrder, setSeriesOrder] = useState<number>(post?.series_order || 1);
+  const [mySeries, setMySeries] = useState<ISeriesBrief[]>([]);
+  const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
+  const [newSeriesTitle, setNewSeriesTitle] = useState<string>('');
+  const [creatingSeries, setCreatingSeries] = useState<boolean>(false);
   const [thumbnail, setThumbnail] = useState<any>(post?.thumbnail?.url || null);
   const [percentage, setPercentage] = useState<number>(0);
   const [saving, setSaving] = useState<boolean>(false);
@@ -63,6 +72,29 @@ export default function PostEditor({ categories, loadingCategories, post }: Comp
   const markDirty = <T,>(setter: (v: T) => void) => (value: T) => {
     setter(value);
     setDirty(true);
+  };
+
+  useEffect(() => {
+    listMySeries().then(setMySeries).catch(() => setMySeries([]));
+    listTags()
+      .then((tags) => setTagSuggestions(tags.map((t) => t.name)))
+      .catch(() => setTagSuggestions([]));
+  }, []);
+
+  const handleCreateSeries = async () => {
+    const seriesTitle = newSeriesTitle.trim();
+    if (!seriesTitle) return;
+    try {
+      const created = await createSeries(seriesTitle);
+      setMySeries((prev) => [created, ...prev]);
+      setSeries(created.slug);
+      setSeriesOrder(1);
+      setNewSeriesTitle('');
+      setCreatingSeries(false);
+      setDirty(true);
+    } catch (e) {
+      ToastError('No se pudo crear la serie');
+    }
   };
 
   // En un post nuevo, la URL se genera a partir del título hasta que se edite a mano
@@ -151,6 +183,8 @@ export default function PostEditor({ categories, loadingCategories, post }: Comp
         slug,
         category,
         status: nextStatus,
+        series,
+        series_order: series ? seriesOrder : 0,
         ...(thumbnailData || {}),
       };
 
@@ -232,7 +266,7 @@ export default function PostEditor({ categories, loadingCategories, post }: Comp
           </div>
         </div>
         <div className="hidden gap-2 lg:flex">
-          {isEdit && isPublished && (
+          {isEdit && (
             <a
               href={`/blog/${post!.slug}`}
               target="_blank"
@@ -240,7 +274,7 @@ export default function PostEditor({ categories, loadingCategories, post }: Comp
               className="btn-ghost"
             >
               <ArrowTopRightOnSquareIcon className="size-4" aria-hidden="true" />
-              Ver
+              {isPublished ? 'Ver' : 'Vista previa'}
             </a>
           )}
           {actions}
@@ -357,18 +391,80 @@ export default function PostEditor({ categories, loadingCategories, post }: Comp
               </div>
 
               <div>
-                <label htmlFor="post-keywords" className="block">
-                  <span className="mb-1 block text-sm font-medium text-gray-900 dark:text-dark-txt">Palabras clave</span>
-                <input
+                <span className="mb-1 block text-sm font-medium text-gray-900 dark:text-dark-txt">Etiquetas</span>
+                <TagInput
                   id="post-keywords"
                   value={keywords}
-                  maxLength={128}
-                  onChange={(e) => markDirty(setKeywords)(e.target.value.replace(/[^\p{L}\p{N}\-_,\s]/gu, ''))}
-                  placeholder="django, docker, nginx"
-                  className="input"
+                  onChange={markDirty(setKeywords)}
+                  suggestions={tagSuggestions}
                 />
+                <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  Hasta 8. Enter o coma para añadir. Cada etiqueta tiene su página.
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="post-series" className="block">
+                  <span className="mb-1 block text-sm font-medium text-gray-900 dark:text-dark-txt">Serie</span>
+                  <select
+                    id="post-series"
+                    value={creatingSeries ? '__new__' : series}
+                    onChange={(e) => {
+                      if (e.target.value === '__new__') {
+                        setCreatingSeries(true);
+                        return;
+                      }
+                      setCreatingSeries(false);
+                      markDirty(setSeries)(e.target.value);
+                    }}
+                    className="input"
+                  >
+                    <option value="">Sin serie</option>
+                    {mySeries.map((s) => (
+                      <option key={s.slug} value={s.slug}>
+                        {s.title}
+                      </option>
+                    ))}
+                    <option value="__new__">+ Nueva serie…</option>
+                  </select>
                 </label>
-                <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">Separadas por comas. Ayudan en la búsqueda.</p>
+                {creatingSeries && (
+                  <div className="mt-2 flex gap-2">
+                    <label htmlFor="new-series" className="min-w-0 flex-1">
+                      <span className="sr-only">Título de la nueva serie</span>
+                      <input
+                        id="new-series"
+                        value={newSeriesTitle}
+                      onChange={(e) => setNewSeriesTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleCreateSeries();
+                        }
+                      }}
+                        placeholder="Título de la serie"
+                        className="input"
+                      />
+                    </label>
+                    <button type="button" onClick={handleCreateSeries} className="btn-primary shrink-0 px-3">
+                      Crear
+                    </button>
+                  </div>
+                )}
+                {series && !creatingSeries && (
+                  <label htmlFor="post-series-order" className="mt-2 flex items-center gap-2 text-sm text-gray-600 dark:text-dark-txt-secondary">
+                    Parte nº
+                    <input
+                      id="post-series-order"
+                      type="number"
+                      min={1}
+                      max={99}
+                      value={seriesOrder}
+                      onChange={(e) => markDirty(setSeriesOrder)(Math.max(1, Number(e.target.value) || 1))}
+                      className="input w-20"
+                    />
+                  </label>
+                )}
               </div>
             </div>
           </Card>
