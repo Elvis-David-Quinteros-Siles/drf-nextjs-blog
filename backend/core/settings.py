@@ -369,3 +369,7 @@ if env("EMAIL_HOST", default=None):
     EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD")
     EMAIL_USE_TLS = env("EMAIL_USE_TLS") == "True"
     DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="Blog <no-reply@edqs.online>")
+    SERVER_EMAIL = DEFAULT_FROM_EMAIL
+
+# Buzón que recibe los mensajes del formulario de contacto
+CONTACT_EMAIL = env("CONTACT_EMAIL", default="contacto@edqs.online")

@@ -12,7 +12,6 @@ from django.utils.crypto import get_random_string
 from django.utils import timezone
 from django.utils.timezone import now
 from django.core.mail import send_mail
-from django.contrib.sites.models import Site
 import pyotp
 import qrcode
 
@@ -231,15 +230,11 @@ class SendOTPLoginView(StandardAPIView):
         totp = pyotp.TOTP(secret)
         otp = totp.now()
 
-        # Enviar correo con OTP
-        # Obtener el dominio del sitio configurado
-        site = Site.objects.get_current()
-        domain = site.domain
-
+        # Enviar correo con OTP (remitente: DEFAULT_FROM_EMAIL)
         send_mail(
             'Your OTP Code',
             f'Your OTP code is {otp}',
-            f'noreply@{domain}',
+            None,
             [email],
             fail_silently=False,
         )

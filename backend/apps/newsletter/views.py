@@ -1,7 +1,8 @@
 from rest_framework_api.views import StandardAPIView
 from rest_framework import status
 from rest_framework.exceptions import APIException, ValidationError
-from django.core.mail import send_mail
+from django.conf import settings
+from django.core.mail import EmailMessage
 
 from utils.string_utils import sanitize_string, sanitize_phone_number, sanitize_email
 
@@ -62,14 +63,13 @@ class ContactUsView(StandardAPIView):
         Phone: {phone_number}
         Message: {message}
         """
-        from_email = email  # Email del remitente (usualmente el del cliente)
-
-        # Dirección de correo del área de contacto (reemplázalo con el correo de la empresa)
-        to_email = 'contacto@empresa.com'
+        # Se envía desde la cuenta del blog (el servidor de correo rechaza remitentes ajenos);
+        # al responder, la respuesta va al visitante
+        mail = EmailMessage(subject, body, to=[settings.CONTACT_EMAIL], reply_to=[sanitize_email(email)])
 
         # Enviar el correo
         try:
-            send_mail(subject, body, from_email, [to_email])
+            mail.send()
         except Exception as e:
             return self.response(f"Error sending email: {str(e)}", status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
