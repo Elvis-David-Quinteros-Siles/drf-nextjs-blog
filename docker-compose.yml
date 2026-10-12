@@ -1,0 +1,118 @@
+# Levanta el blog (Django + Celery + Redis + Next.js).
+#
+# Servicios externos (NO se crean en este compose):
+#   - PostgreSQL: contenedor existente "postgres", publicado en el host en el puerto 5432.
+#     Se accede vía host.docker.internal.
+#   - MinIO: contenedor independiente conectado a la red externa "blog-minio-net".
+#     Ver README-docker.md para crearlo.
+
+name: drf-nextjs-blog
+
+x-backend-base: &backend-base
+  build: ./backend
+  env_file: ./backend/.env
+  environment:
+    # Los bind mounts de Windows no emiten eventos de archivo: uvicorn --reload necesita polling
+    WATCHFILES_FORCE_POLLING: "true"
+  volumes:
+    - ./backend:/app
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  networks:
+    - default
+    - blog-minio-net
+  restart: unless-stopped
+
+services:
+  # Django (API)
+  backend:
+    <<: *backend-base
+    container_name: blog-backend
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             uvicorn core.asgi:application --host 0.0.0.0 --port 8000 --reload"
+    ports:
+      - "8020:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/admin/login/')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # Celery worker
+  celery-worker:
+    <<: *backend-base
+    container_name: blog-celery-worker
+    command: celery -A core worker --loglevel=info
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # Celery beat
+  celery-beat:
+    <<: *backend-base
+    container_name: blog-celery-beat
+    command: celery -A core beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # Redis (cache, channels y broker de Celery)
+  redis:
+    image: redis:7-alpine
+    container_name: blog-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Crea el bucket en el MinIO externo (se ejecuta una vez y termina)
+  minio-init:
+    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
+    container_name: blog-minio-init
+    env_file: ./backend/.env
+    networks:
+      - blog-minio-net
+    entrypoint: >
+      sh -c "until mc alias set blog $${AWS_S3_ENDPOINT_URL} $${AWS_ACCESS_KEY_ID} $${AWS_SECRET_ACCESS_KEY}; do
+               echo 'Esperando a MinIO...'; sleep 2;
+             done &&
+             mc mb --ignore-existing blog/$${AWS_STORAGE_BUCKET_NAME}"
+
+  # Next.js
+  frontend:
+    build: ./frontend
+    container_name: blog-frontend
+    env_file: ./frontend/.env
+    environment:
+      WATCHPACK_POLLING: "true"
+    volumes:
+      - ./frontend:/app
+      - frontend-node-modules:/app/node_modules
+      - frontend-next:/app/.next
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+  frontend-node-modules:
+  frontend-next:
+
+networks:
+  blog-minio-net:
+    external: true
