@@ -16,6 +16,8 @@ x-backend-base: &backend-base
   build: ./backend
   image: drf-nextjs-blog-backend:latest
   env_file: ./backend/.env
+  # Nombre que Django usa en el Message-ID y en el HELO de los correos (si no, sale el id del contenedor)
+  hostname: blog.edqs.online
   networks:
     - internal
     - minio-net
