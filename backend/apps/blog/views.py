@@ -32,8 +32,6 @@ from apps.authentication.models import UserAccount
 from apps.media.models import Media
 from utils.string_utils import sanitize_string, sanitize_html
 
-from faker import Faker
-import random
 import uuid
 from django.utils.text import slugify
 
@@ -1105,69 +1103,3 @@ class PostShareView(StandardAPIView):
         analytics.increment_metric("shares")
 
         return self.response(f"Post '{post.title}' shared successfully on {platform.capitalize()}")
-
-
-class GenerateFakePostsView(StandardAPIView):
-
-    def get(self,request):
-        # Configurar Faker
-        fake = Faker()
-
-        # Obtener todas las categorías existentes
-        categories = list(Category.objects.all())
-
-        if not categories:
-            return self.response("No hay categorías disponibles para asignar a los posts", 400)
-
-        posts_to_generate = 100  # Número de posts ficticios a generar
-        status_options = ["draft", "published"]
-
-        for _ in range(posts_to_generate):
-            title = fake.sentence(nb_words=6)  # Generar título aleatorio
-            user = UserAccount.objects.get(username="SoloPython")
-            post = Post(
-                id=uuid.uuid4(),
-                user=user,
-                title=title,
-                description=fake.sentence(nb_words=12),
-                content=fake.paragraph(nb_sentences=5),
-                keywords=", ".join(fake.words(nb=5)),
-                slug=slugify(title),  # Generar slug a partir del título
-                category=random.choice(categories),  # Asignar una categoría aleatoria
-                status=random.choice(status_options),
-            )
-            post.save()
-
-        return self.response(f"{posts_to_generate} posts generados exitosamente.")
-    
-
-class GenerateFakeAnalyticsView(StandardAPIView):
-
-    def get(self, request):
-        fake = Faker()
-
-        # Obtener todos los posts existentes
-        posts = Post.objects.all()
-
-        if not posts:
-            return self.response({"error": "No hay posts disponibles para generar analíticas"}, status=400)
-
-        analytics_to_generate = len(posts)  # Una analítica por post
-
-        # Generar analíticas para cada post
-        for post in posts:
-            views = random.randint(50, 1000)  # Número aleatorio de vistas
-            impressions = views + random.randint(100, 2000)  # Impresiones >= vistas
-            clicks = random.randint(0, views)  # Los clics son <= vistas
-            avg_time_on_page = round(random.uniform(10, 300), 2)  # Tiempo promedio en segundos
-            
-            # Crear o actualizar analíticas para el post
-            analytics, created = PostAnalytics.objects.get_or_create(post=post)
-            analytics.views = views
-            analytics.impressions = impressions
-            analytics.clicks = clicks
-            analytics.avg_time_on_page = avg_time_on_page
-            analytics._update_click_through_rate()  # Recalcular el CTR
-            analytics.save()
-
-        return self.response({"message": f"Analíticas generadas para {analytics_to_generate} posts."})

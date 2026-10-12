@@ -103,6 +103,12 @@ docker compose exec backend python manage.py createsuperuser
 
 Al iniciar, el backend aplica las migraciones y ejecuta `collectstatic`.
 
+Para cargar las categorías y los posts iniciales (idempotente; `--refresh` restaura el contenido versionado):
+
+```bash
+docker compose exec backend python manage.py seed_posts --author <usuario>
+```
+
 ## Producción
 
 El despliegue en el VPS usa `docker-compose.prod.yml`, con el frontend compilado (`next build`), Uvicorn sin recarga y un nginx propio (`blog-nginx`) que reparte el tráfico:
