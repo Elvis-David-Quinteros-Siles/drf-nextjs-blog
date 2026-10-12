@@ -1,20 +1,23 @@
 import { EnvelopeIcon } from '@heroicons/react/24/outline';
 import EmailForm from './EmailForm';
 
+/** Bloque de suscripción a la newsletter, para el final de los artículos y la home. */
 export default function EmailInput() {
   return (
-    <div className="dark:bg-dark-primary col-span-5 m-2 rounded bg-blue-500 p-6">
-      <EnvelopeIcon className="mb-4 h-6 w-auto text-white" />
-      <h3 className="text-2xl font-semibold leading-6 text-white">Stay in the loop</h3>
-      <p className="text-md mt-4 text-lg text-gray-100">
-        Get free expert insights and tips to grow your knowledge business sent right to your inbox.{' '}
-      </p>
-      <EmailForm />
-      <p className="mt-2 text-xs leading-normal text-white">
-        By submitting you agree to receive our monthly Knowledge Newsletter as well as other
-        promotional emails from us. You may withdraw your consent at any time via the “Unsubscribe”
-        link in any email or view our privacy policy at any time.
-      </p>
-    </div>
+    <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 px-6 py-10 text-white sm:px-10">
+      <div className="absolute -right-16 -top-16 size-56 rounded-full bg-white/10 blur-2xl" aria-hidden="true" />
+      <div className="relative grid gap-6 lg:grid-cols-2 lg:items-center">
+        <div>
+          <EnvelopeIcon className="size-7 text-indigo-200" aria-hidden="true" />
+          <h2 className="mt-3 text-2xl font-semibold tracking-tight">Recibe los nuevos artículos</h2>
+          <p className="mt-2 text-indigo-100">
+            Un correo cuando publique algo nuevo sobre backend, DevOps o seguridad. Sin spam.
+          </p>
+        </div>
+        <div className="[&_.input]:border-white/20 [&_.input]:bg-white [&_.input]:text-gray-900 [&_.btn-primary]:bg-gray-900 [&_.btn-primary:hover]:bg-gray-800">
+          <EmailForm />
+        </div>
+      </div>
+    </section>
   );
 }

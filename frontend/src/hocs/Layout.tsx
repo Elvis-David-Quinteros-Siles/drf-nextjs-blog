@@ -23,9 +23,17 @@ export default function Layout({ children }: PageProps) {
   }, [dispatch, isAuthenticated]);
 
   return (
-    <div>
+    <div className="flex min-h-screen flex-col">
+      <a
+        href="#contenido"
+        className="sr-only z-50 rounded-lg bg-indigo-600 px-4 py-2 text-white focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
+      >
+        Saltar al contenido
+      </a>
       <Navbar />
-      {children}
+      <main id="contenido" className="flex-1">
+        {children}
+      </main>
       <Footer />
     </div>
   );

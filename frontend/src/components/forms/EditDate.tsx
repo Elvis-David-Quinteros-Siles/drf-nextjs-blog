@@ -28,7 +28,7 @@ export default function EditDate({
 
   return (
     <div className="w-full">
-      <span className="dark:text-dark-txt block text-sm font-bold text-gray-900">{title}</span>
+      <span className="dark:text-dark-txt mb-1 block text-sm font-medium text-gray-900">{title}</span>
       <div className={`${inputFormClassName}`}>
         <input
           type={useTime ? 'datetime-local' : 'date'}

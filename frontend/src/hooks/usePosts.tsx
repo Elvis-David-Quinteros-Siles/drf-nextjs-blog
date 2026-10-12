@@ -46,7 +46,7 @@ export default function usePosts({ username, showFeatured, categories, searchBy 
           setNextUrl(res.next);
         }
       } catch (err) {
-        ToastError('Error fetching posts');
+        ToastError('No se pudieron cargar los artículos');
       } finally {
         setLoading(false);
       }
@@ -93,7 +93,7 @@ export default function usePosts({ username, showFeatured, categories, searchBy 
           setNextUrl(res.next);
         }
       } catch (e) {
-        ToastError('Error loading more posts');
+        ToastError('No se pudieron cargar más artículos');
       } finally {
         setLoadingMore(false);
       }

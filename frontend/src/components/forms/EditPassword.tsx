@@ -40,7 +40,7 @@ export default function EditPassword({
 
   return (
     <div className="w-full">
-      <span className="dark:text-dark-txt block text-sm font-bold text-gray-900">{title}</span>
+      <span className="dark:text-dark-txt mb-1 block text-sm font-medium text-gray-900">{title}</span>
       <span className="dark:text-dark-txt-secondary mb-2 block text-sm text-gray-500">
         {description}
       </span>
@@ -60,7 +60,7 @@ export default function EditPassword({
           onClick={togglePasswordVisibility}
           className="absolute inset-y-0 right-0 flex items-center pr-3"
         >
-          {showPassword ? 'Hide' : 'Show'}
+          {showPassword ? 'Ocultar' : 'Mostrar'}
         </button>
         {showMaxTextLength && (
           <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">

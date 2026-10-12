@@ -120,7 +120,7 @@ export default function EditImage({
 
   const bannerStyle = (
     <div>
-      <span className="dark:text-dark-txt block text-sm font-bold text-gray-900">{title}</span>
+      <span className="dark:text-dark-txt mb-1 block text-sm font-medium text-gray-900">{title}</span>
       <span className="dark:text-dark-txt-secondary mb-2 block text-sm text-gray-500">
         {description}
       </span>
@@ -162,7 +162,7 @@ export default function EditImage({
 
   const profileStyle = (
     <div>
-      <span className="dark:text-dark-txt block text-sm font-bold text-gray-900">{title}</span>
+      <span className="dark:text-dark-txt mb-1 block text-sm font-medium text-gray-900">{title}</span>
       <span className="dark:text-dark-txt-secondary mb-2 block text-sm text-gray-500">
         {description}
       </span>

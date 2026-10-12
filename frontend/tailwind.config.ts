@@ -14,6 +14,10 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['var(--font-sans)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-mono)', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+      },
       colors: {
         background: 'var(--background)',
         foreground: 'var(--foreground)',
@@ -32,6 +36,11 @@ export default {
         DEFAULT: {
           css: {
             maxWidth: '100%',
+            'code::before': { content: 'none' },
+            'code::after': { content: 'none' },
+            a: { textUnderlineOffset: '3px' },
+            pre: { borderRadius: '0.75rem', fontSize: '0.875em' },
+            blockquote: { fontStyle: 'normal', fontWeight: '500' },
           },
         },
       },

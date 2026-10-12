@@ -7,7 +7,6 @@ Cada post recibe una portada generada con Pillow y subida al bucket.
     python manage.py seed_posts --author elvis
 """
 import io
-import textwrap
 
 import boto3
 from bs4 import BeautifulSoup
@@ -36,6 +35,21 @@ PALETTES = {
 }
 
 
+def wrap_text(draw, text, font, max_width):
+    """Parte el texto en líneas que caben en max_width píxeles."""
+    lines, current = [], ""
+    for word in text.split():
+        candidate = f"{current} {word}".strip()
+        if current and draw.textlength(candidate, font=font) > max_width:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return lines
+
+
 def render_cover(title, category_name, palette):
     """PNG 1200x630 con gradiente diagonal, categoría y título."""
     width, height = COVER_SIZE
@@ -50,7 +64,7 @@ def render_cover(title, category_name, palette):
     draw.text((80, 80), category_name.upper(), font=ImageFont.truetype(FONT_MONO, 30), fill=(165, 243, 252))
     title_font = ImageFont.truetype(FONT_BOLD, 58)
     y = 170
-    for line in textwrap.wrap(title, width=32)[:5]:
+    for line in wrap_text(draw, title, title_font, width - 160)[:5]:
         draw.text((80, y), line, font=title_font, fill=(255, 255, 255))
         y += 74
     draw.text((80, height - 90), "blog.edqs.online", font=ImageFont.truetype(FONT_MONO, 28), fill=(203, 213, 225))
@@ -121,9 +135,11 @@ class Command(BaseCommand):
         key = f"media/blog/posts/{author.username}/{data['slug']}/portada.png"
         png = render_cover(data["title"], category.name, PALETTES.get(category.slug, PALETTES["backend"]))
         s3.put_object(Bucket=settings.AWS_STORAGE_BUCKET_NAME, Key=key, Body=png, ContentType="image/png")
-        post.thumbnail = Media.objects.create(
-            name="portada.png", size=str(len(png)), type="image/png", key=key, media_type="image"
-        )
+        media_fields = dict(name="portada.png", size=str(len(png)), type="image/png", key=key, media_type="image")
+        if post.thumbnail:
+            Media.objects.filter(pk=post.thumbnail.pk).update(**media_fields)
+        else:
+            post.thumbnail = Media.objects.create(**media_fields)
         post.save()
 
         # Encabezados para la tabla de contenidos, igual que al crear un post desde la API

@@ -54,7 +54,7 @@ export default function EditURL({
 
   return (
     <div className="w-full">
-      <span className="dark:text-dark-txt mb-2 block text-sm font-bold text-gray-900">{title}</span>
+      <span className="dark:text-dark-txt mb-2 mb-1 block text-sm font-medium text-gray-900">{title}</span>
       <div className={`${inputFormClassName}`}>
         <input
           type="url"

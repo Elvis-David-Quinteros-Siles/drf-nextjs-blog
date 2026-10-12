@@ -59,48 +59,48 @@ export default function Page() {
   };
 
   return (
-    <div className="flex min-h-full flex-1 flex-col justify-center px-6 pt-12 lg:px-8">
+    <div className="flex min-h-full flex-1 flex-col justify-center px-4 py-12 sm:py-20">
       <div className="sm:mx-auto sm:w-full sm:max-w-sm">
-        <h2 className="mt-10 text-center text-2xl/9 font-bold tracking-tight text-gray-900">
-          Registrate y empieza ahora
+        <h2 className="text-center text-2xl/9 font-bold tracking-tight text-gray-900 sm:text-3xl dark:text-white">
+          Crea tu cuenta
         </h2>
       </div>
 
-      <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
-        <form onSubmit={handleOnSubmit} className="space-y-2">
-          <EditText data={firstName} setData={setFirstName} title="First Name" required />
-          <EditText data={lastName} setData={setLastName} title="Last Name" required />
-          <EditText data={username} setData={setUsername} title="Username" required />
-          <EditEmail data={email} setData={setEmail} title="Email" required />
-          <EditPassword data={password} setData={setPassword} title="Password" required />
+      <div className="mt-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:mx-auto sm:w-full sm:max-w-md sm:p-8 dark:border-dark-third dark:bg-dark-bg">
+        <form onSubmit={handleOnSubmit} className="space-y-4">
+          <EditText data={firstName} setData={setFirstName} title="Nombre" required />
+          <EditText data={lastName} setData={setLastName} title="Apellido" required />
+          <EditText data={username} setData={setUsername} title="Nombre de usuario" required />
+          <EditEmail data={email} setData={setEmail} title="Correo electrónico" required />
+          <EditPassword data={password} setData={setPassword} title="Contraseña" required />
           <EditPassword
             data={rePassword}
             setData={setRePassword}
-            title="Repeat Password"
+            title="Repite la contraseña"
             required
           />
 
           {PasswordValidationText()}
 
           <Button disabled={loading} hoverEffect={!loading} type="submit">
-            {loading ? <LoadingMoon /> : 'Register'}
+            {loading ? <LoadingMoon /> : 'Crear cuenta'}
           </Button>
         </form>
 
-        <div className="mt-10 space-y-2">
-          <p className="text-center text-sm/6 text-gray-500">
-            No te llego el correo de activacion?{' '}
+        <div className="mt-8 space-y-2 border-t border-gray-100 pt-6 dark:border-dark-third">
+          <p className="text-center text-sm/6 text-gray-500 dark:text-gray-400">
+            ¿No te llegó el correo de activación?{' '}
             <Link
               href="/resend-activation"
-              className="font-semibold text-indigo-600 hover:text-indigo-500"
+              className="font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
             >
               Reenviar correo
             </Link>
           </p>
-          <p className="text-center text-sm/6 text-gray-500">
-            Ya tienes cuenta?{' '}
-            <Link href="/login" className="font-semibold text-indigo-600 hover:text-indigo-500">
-              Acceder
+          <p className="text-center text-sm/6 text-gray-500 dark:text-gray-400">
+            ¿Ya tienes cuenta?{' '}
+            <Link href="/login" className="font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
+              Ingresar
             </Link>
           </p>
         </div>

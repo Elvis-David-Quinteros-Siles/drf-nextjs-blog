@@ -1,18 +1,15 @@
 import { Html, Head, Main, NextScript } from 'next/document';
-import { useEffect } from 'react';
-import { resetServerContext } from 'react-beautiful-dnd';
 
 export default function Document() {
-  useEffect(() => {
-    resetServerContext();
-  }, []);
-
   return (
-    <Html lang="en">
+    <Html lang="es">
       <Head>
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+        <meta name="theme-color" content="#0D1117" media="(prefers-color-scheme: dark)" />
         <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet" />
       </Head>
-      <body className="antialiased">
+      <body>
         <Main />
         <NextScript />
       </body>

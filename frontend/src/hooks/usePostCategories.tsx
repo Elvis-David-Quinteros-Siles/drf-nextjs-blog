@@ -15,7 +15,7 @@ export default function usePostCategories() {
         setCategories(res.results);
       }
     } catch (err) {
-      ToastError('Error loading categories');
+      ToastError('No se pudieron cargar las categorías');
     } finally {
       setLoading(false);
     }

@@ -1,67 +1,68 @@
 import Head from 'next/head';
+import { SITE_NAME, SITE_URL } from '@/utils/site';
 
 export interface SEOProps {
   title: string;
   description: string;
-  keywords: string;
+  keywords?: string;
   href?: string;
   robots?: string;
   author?: string;
   publisher?: string;
   image?: string;
   twitterHandle?: string;
+  type?: 'website' | 'article';
 }
 
 export default function SEO({
   title,
   description,
-  keywords,
+  keywords = '',
   href = '',
   robots = 'index, follow',
   author = '',
-  publisher = '',
+  publisher = SITE_NAME,
   image = '',
   twitterHandle = '',
+  type = 'website',
 }: SEOProps) {
+  const fullTitle = title === SITE_NAME ? title : `${title} · ${SITE_NAME}`;
+  const url = href || SITE_URL;
   return (
     <Head>
-      <link rel="icon" href="/favicon.ico" />
-      <title>{title}</title>
+      <title>{fullTitle}</title>
       <meta name="description" content={description} />
-      <meta name="keywords" content={keywords} />
-      <link rel="canonical" href={href} />
+      {keywords && <meta name="keywords" content={keywords} />}
+      <link rel="canonical" href={url} />
       <meta name="robots" content={robots} />
-      <meta name="author" content={author} />
+      {author && <meta name="author" content={author} />}
       <meta name="publisher" content={publisher} />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-      {/* Social Media Tags */}
+      <meta property="og:site_name" content={SITE_NAME} />
+      <meta property="og:locale" content="es_ES" />
       <meta property="og:title" content={title} />
       <meta property="og:description" content={description} />
-      <meta property="og:url" content={href} />
-      <meta property="og:image" content={image} />
-      <meta property="og:image:width" content="1370" />
-      <meta property="og:image:height" content="849" />
-      <meta property="og:image:alt" content={image} />
-      <meta property="og:type" content="website" />
+      <meta property="og:url" content={url} />
+      <meta property="og:type" content={type} />
+      {image && <meta property="og:image" content={image} />}
 
-      {/* Twitter meta Tags */}
+      <meta name="twitter:card" content={image ? 'summary_large_image' : 'summary'} />
       <meta name="twitter:title" content={title} />
       <meta name="twitter:description" content={description} />
-      <meta name="twitter:image" content={image} />
-      <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:site" content={twitterHandle} />
-      <meta name="twitter:player:width" content="1280" />
-      <meta name="twitter:player:height" content="720" />
+      {image && <meta name="twitter:image" content={image} />}
+      {twitterHandle && <meta name="twitter:site" content={twitterHandle} />}
     </Head>
   );
 }
 
 SEO.defaultProps = {
+  keywords: '',
   href: '',
   robots: 'index, follow',
   author: '',
-  publisher: '',
+  publisher: SITE_NAME,
   image: '',
   twitterHandle: '',
+  type: 'website',
 };

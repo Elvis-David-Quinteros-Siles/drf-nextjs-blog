@@ -3,46 +3,26 @@ import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
 
 export default function DarkModeButton() {
-  const { systemTheme, theme, setTheme } = useTheme();
-
+  const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState<boolean>(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const renderThemeChanger = () => {
-    if (!mounted) return null;
+  // Mismo tamaño antes de montar para que la barra no salte
+  if (!mounted) return <span className="inline-block size-10" />;
 
-    const currentTheme = theme === 'system' ? systemTheme : theme;
-
-    if (currentTheme === 'dark') {
-      return (
-        <button
-          type="button"
-          onClick={() => {
-            setTheme('light');
-          }}
-        >
-          <SunIcon
-            className="h-6 w-auto text-yellow-600 hover:text-yellow-700"
-            aria-hidden="false"
-          />
-        </button>
-      );
-    }
-
-    return (
-      <button
-        type="button"
-        onClick={() => {
-          setTheme('dark');
-        }}
-      >
-        <MoonIcon className="h-6 w-auto text-blue-800 hover:text-blue-900" aria-hidden="false" />
-      </button>
-    );
-  };
-
-  return renderThemeChanger();
+  const isDark = resolvedTheme === 'dark';
+  return (
+    <button
+      type="button"
+      onClick={() => setTheme(isDark ? 'light' : 'dark')}
+      aria-label={isDark ? 'Activar modo claro' : 'Activar modo oscuro'}
+      title={isDark ? 'Modo claro' : 'Modo oscuro'}
+      className="inline-flex size-10 items-center justify-center rounded-lg text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-txt dark:hover:bg-dark-second dark:hover:text-white"
+    >
+      {isDark ? <SunIcon className="size-5" /> : <MoonIcon className="size-5" />}
+    </button>
+  );
 }

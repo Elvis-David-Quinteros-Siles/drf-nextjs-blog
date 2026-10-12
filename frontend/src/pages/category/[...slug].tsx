@@ -1,20 +1,25 @@
-import FeaturedPosts from '@/components/pages/blog/FeaturedPosts';
-import PostsList from '@/components/pages/blog/PostsList';
-import Layout from '@/hocs/Layout';
-import usePosts from '@/hooks/usePosts';
-import { ICategory } from '@/interfaces/blog/ICategory';
 import { GetServerSideProps, GetServerSidePropsContext, InferGetServerSidePropsType } from 'next';
 import { useMemo } from 'react';
+import PageHeader from '@/components/pages/blog/PageHeader';
+import PostsList from '@/components/pages/blog/PostsList';
+import CategoriesBar from '@/components/pages/categories/CategoriesBar';
+import SEO from '@/components/SEO';
+import Layout from '@/hocs/Layout';
+import usePostCategories from '@/hooks/usePostCategories';
+import usePosts from '@/hooks/usePosts';
+import { ICategory } from '@/interfaces/blog/ICategory';
+import { SITE_URL } from '@/utils/site';
 
 export const getServerSideProps: GetServerSideProps = async (
   context: GetServerSidePropsContext,
 ) => {
-  const { slug } = context.params as { slug: string };
+  const { slug } = context.params as { slug: string[] };
+  const categorySlug = Array.isArray(slug) ? slug[0] : slug;
 
   let category: ICategory | null = null;
 
   try {
-    const apiRes = await fetch(`${process.env.API_URL}/api/blog/category/?slug=${slug}`, {
+    const apiRes = await fetch(`${process.env.API_URL}/api/blog/category/?slug=${categorySlug}`, {
       headers: {
         Accept: 'application/json',
         'API-Key': `${process.env.BACKEND_API_KEY}`,
@@ -25,17 +30,16 @@ export const getServerSideProps: GetServerSideProps = async (
       category = data.results;
     }
   } catch (e) {
-    return {
-      redirect: {
-        destination: '/404',
-        permanent: false,
-      },
-    };
+    category = null;
+  }
+
+  if (!category) {
+    return { notFound: true };
   }
 
   return {
     props: {
-      slug,
+      slug: categorySlug,
       category,
     },
   };
@@ -45,28 +49,35 @@ export default function Page({
   slug,
   category,
 }: InferGetServerSidePropsType<typeof getServerSideProps>) {
-  // Inside your Page component
   const categories = useMemo(() => [slug], [slug]);
-
-  const { posts: featuredPosts, loading: loadingFeaturedPosts } = usePosts({
-    showFeatured: true,
-    categories,
-  });
-
-  const { posts, loading } = usePosts({ showFeatured: false, categories });
+  const { posts, loading, nextUrl, loadMore, loadingMore } = usePosts({ categories });
+  const { categories: allCategories, loading: loadingCategories } = usePostCategories();
 
   return (
-    <div>
-      <div className="pt-16">
-        <div className="mx-auto grid max-w-7xl grid-cols-1 gap-x-8 gap-y-12 px-6 sm:gap-y-16 lg:grid-cols-2 lg:px-8">
-          <h1 className="text-3xl font-bold">Posts for: {category?.name}</h1>
-        </div>
+    <>
+      <SEO
+        title={category?.title || category?.name}
+        description={category?.description || `Artículos sobre ${category?.name}.`}
+        href={`${SITE_URL}/category/${slug}`}
+      />
+      <PageHeader
+        eyebrow="Categoría"
+        title={category?.title || category?.name}
+        description={category?.description}
+      >
+        <CategoriesBar categories={allCategories} loading={loadingCategories} active={slug} />
+      </PageHeader>
+      <div className="container-page py-12">
+        <PostsList
+          posts={posts}
+          loading={loading}
+          emptyMessage="Todavía no hay artículos en esta categoría."
+          hasMore={Boolean(nextUrl)}
+          loadingMore={loadingMore}
+          onLoadMore={loadMore}
+        />
       </div>
-      {featuredPosts?.length > 0 && (
-        <FeaturedPosts posts={featuredPosts} loading={loadingFeaturedPosts} />
-      )}
-      <PostsList posts={posts} loading={loading} />
-    </div>
+    </>
   );
 }
 

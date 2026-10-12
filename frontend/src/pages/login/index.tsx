@@ -69,7 +69,7 @@ export default function Page() {
         await dispatch(loadUser());
         await dispatch(setLoginSuccess());
         ToastSuccess('Login successfull.');
-        router.push('/');
+        router.push(typeof router.query.next === 'string' && router.query.next.startsWith('/') ? router.query.next : '/');
       } else {
         setEmail('');
         setOTP('');
@@ -82,46 +82,46 @@ export default function Page() {
   };
 
   return (
-    <div className="flex min-h-full flex-1 flex-col justify-center px-6 pt-12 lg:px-8">
+    <div className="flex min-h-full flex-1 flex-col justify-center px-4 py-12 sm:py-20">
       <div className="sm:mx-auto sm:w-full sm:max-w-sm">
-        <h2 className="mt-10 text-center text-2xl/9 font-bold tracking-tight text-gray-900">
+        <h2 className="text-center text-2xl/9 font-bold tracking-tight text-gray-900 sm:text-3xl dark:text-white">
           Accede a tu cuenta
         </h2>
       </div>
 
-      <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
+      <div className="mt-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:mx-auto sm:w-full sm:max-w-md sm:p-8 dark:border-dark-third dark:bg-dark-bg">
         {step === 1 && (
-          <form onSubmit={handleOnSubmit} className="space-y-2">
-            <EditEmail data={email} setData={setEmail} title="Email" required />
+          <form onSubmit={handleOnSubmit} className="space-y-4">
+            <EditEmail data={email} setData={setEmail} title="Correo electrónico" required />
             <Button disabled={loading} hoverEffect={!loading} type="submit">
-              {loading ? <LoadingMoon /> : 'Login'}
+              {loading ? <LoadingMoon /> : 'Ingresar'}
             </Button>
           </form>
         )}
 
         {step === 2 && (
-          <form onSubmit={handleOTPSubmit} className="space-y-2">
-            <EditText data={otp} setData={setOTP} title="OTP Code" required />
+          <form onSubmit={handleOTPSubmit} className="space-y-4">
+            <EditText data={otp} setData={setOTP} title="Código de verificación" required />
             <Button disabled={loading} hoverEffect={!loading} type="submit">
-              {loading ? <LoadingMoon /> : 'Login'}
+              {loading ? <LoadingMoon /> : 'Ingresar'}
             </Button>
           </form>
         )}
 
-        <div className="mt-10 space-y-2">
-          <p className="text-center text-sm/6 text-gray-500">
-            No tienes cuenta?{' '}
-            <Link href="/register" className="font-semibold text-indigo-600 hover:text-indigo-500">
-              Registrate
+        <div className="mt-8 space-y-2 border-t border-gray-100 pt-6 dark:border-dark-third">
+          <p className="text-center text-sm/6 text-gray-500 dark:text-gray-400">
+            ¿No tienes cuenta?{' '}
+            <Link href="/register" className="font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
+              Regístrate
             </Link>
           </p>
-          <p className="text-center text-sm/6 text-gray-500">
-            Olvidaste tu contraseña?{' '}
+          <p className="text-center text-sm/6 text-gray-500 dark:text-gray-400">
+            ¿Olvidaste tu contraseña?{' '}
             <Link
               href="/forgot-password"
-              className="font-semibold text-indigo-600 hover:text-indigo-500"
+              className="font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
             >
-              Olvide mi contraseña
+              Recupérala
             </Link>
           </p>
         </div>

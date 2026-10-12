@@ -55,15 +55,15 @@ export default function Page() {
   };
 
   return (
-    <div className="flex min-h-full flex-1 flex-col justify-center px-6 pt-12 lg:px-8">
+    <div className="flex min-h-full flex-1 flex-col justify-center px-4 py-12 sm:py-20">
       <div className="sm:mx-auto sm:w-full sm:max-w-sm">
-        <h2 className="mt-10 text-center text-2xl/9 font-bold tracking-tight text-gray-900">
+        <h2 className="text-center text-2xl/9 font-bold tracking-tight text-gray-900 sm:text-3xl dark:text-white">
           Cambia tu contraseña
         </h2>
       </div>
 
-      <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
-        <form onSubmit={handleOnSubmit} className="space-y-2">
+      <div className="mt-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:mx-auto sm:w-full sm:max-w-md sm:p-8 dark:border-dark-third dark:bg-dark-bg">
+        <form onSubmit={handleOnSubmit} className="space-y-4">
           <EditPassword data={password} setData={setPassword} title="New Password" required />
           <EditPassword
             data={rePassword}
