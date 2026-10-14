@@ -1,7 +1,9 @@
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, re_path, include
 from django.conf.urls.static import static
 from django.conf import settings
+
+from apps.authentication.social import SocialAuthView
 
 urlpatterns = [
     path('api/authentication/', include("apps.authentication.urls")),
@@ -12,6 +14,7 @@ urlpatterns = [
     
     path("auth/", include("djoser.urls")),
     path("auth/", include("djoser.urls.jwt")),
-    # path("auth/", include("djoser.social.urls")),
+    # Login con Google y GitHub (djoser social, con soporte de 2FA)
+    re_path(r"^auth/o/(?P<provider>\S+)/$", SocialAuthView.as_view(), name="provider-auth"),
     path('admin/', admin.site.urls),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

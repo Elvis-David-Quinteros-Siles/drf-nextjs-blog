@@ -4,7 +4,7 @@ Plataforma de blog full stack con **Django REST Framework** en el backend y **Ne
 
 ## Funcionalidades
 
-- **Autenticación**: registro, activación por correo, login con JWT, recuperación de contraseña y login con OTP (djoser + SimpleJWT, protección de fuerza bruta con django-axes).
+- **Autenticación**: registro, activación por correo, login con JWT, recuperación de contraseña, verificación en dos pasos por correo y login con Google y GitHub (djoser + SimpleJWT + social-auth, protección de fuerza bruta con django-axes).
 - **Blog**: posts con editor enriquecido, categorías, encabezados, likes, búsqueda y analíticas de vistas e interacciones.
 - **Perfiles de usuario**: foto de perfil, banner, biografía y redes sociales; página pública por usuario (`/@usuario`).
 - **Media**: subida de imágenes directamente al almacenamiento S3 compatible (MinIO o AWS S3) mediante URLs firmadas.

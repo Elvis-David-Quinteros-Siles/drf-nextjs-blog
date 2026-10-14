@@ -30,6 +30,8 @@ djoser==2.3.1
 argon2-cffi==21.3.0
 argon2-cffi-bindings==21.2.0
 djangorestframework-simplejwt==5.3.1
+social-auth-app-django==5.4.3
+social-auth-core==4.7.0
 
 django-storages==1.14.4
 boto3==1.35.15

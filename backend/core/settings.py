@@ -64,7 +64,8 @@ THIRD_PARTY_APPS = [
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
     'axes',
-    'storages'
+    'storages',
+    'social_django',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + PROJECT_APPS + THIRD_PARTY_APPS
@@ -192,6 +193,10 @@ AUTHENTICATION_BACKENDS = (
     # AxesStandaloneBackend should be the first backend in the AUTHENTICATION_BACKENDS list.
     'axes.backends.AxesStandaloneBackend',
 
+    # Login con Google y GitHub (djoser social)
+    "social_core.backends.google.GoogleOAuth2",
+    "social_core.backends.github.GithubOAuth2",
+
     "django.contrib.auth.backends.ModelBackend",
 )
 
@@ -205,11 +210,38 @@ SIMPLE_JWT = {
     "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
     "SIGNING_KEY": env("SECRET_KEY"),
+    "TOKEN_OBTAIN_SERIALIZER": "apps.authentication.serializers.TwoFactorTokenObtainPairSerializer",
 }
 
 # Dominio del frontend que djoser usa en los enlaces de los correos (activación, reset de contraseña)
 DOMAIN = env("FRONTEND_DOMAIN", default="localhost:3000")
 SITE_NAME = env("SITE_NAME", default="Blog")
+
+# ---- Login social (Google y GitHub) ----
+# Callback de cada proveedor: <FRONTEND_PROTOCOL>://<FRONTEND_DOMAIN>/api/auth/oauth/<proveedor>/callback
+SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = env("GOOGLE_OAUTH2_CLIENT_ID", default="")
+SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = env("GOOGLE_OAUTH2_CLIENT_SECRET", default="")
+SOCIAL_AUTH_GOOGLE_OAUTH2_SCOPE = ["openid", "email", "profile"]
+SOCIAL_AUTH_GITHUB_KEY = env("GITHUB_OAUTH_CLIENT_ID", default="")
+SOCIAL_AUTH_GITHUB_SECRET = env("GITHUB_OAUTH_CLIENT_SECRET", default="")
+SOCIAL_AUTH_GITHUB_SCOPE = ["user:email"]
+
+SOCIAL_AUTH_STRATEGY = "apps.authentication.strategy.AxesDjangoStrategy"
+SOCIAL_AUTH_USER_FIELDS = ["email", "username", "first_name", "last_name"]
+SOCIAL_AUTH_PIPELINE = (
+    "social_core.pipeline.social_auth.social_details",
+    "social_core.pipeline.social_auth.social_uid",
+    "social_core.pipeline.social_auth.auth_allowed",
+    "social_core.pipeline.social_auth.social_user",
+    "apps.authentication.social.require_verified_email",
+    "apps.authentication.social.get_username",
+    # Seguro porque require_verified_email solo deja pasar correos verificados por el proveedor
+    "social_core.pipeline.social_auth.associate_by_email",
+    "social_core.pipeline.user.create_user",
+    "apps.authentication.social.activate_user",
+    "social_core.pipeline.social_auth.associate_user",
+    "social_core.pipeline.social_auth.load_extra_data",
+)
 
 DJOSER = {
     # Los enlaces de los correos apuntan al frontend (la API recibe las peticiones por http interno)
@@ -226,6 +258,12 @@ DJOSER = {
     'PASSWORD_RESET_CONFIRM_URL': 'forgot-password-confirm/?uid={uid}&token={token}',
     'USERNAME_RESET_CONFIRM_URL': 'email/username_reset_confirm/{uid}/{token}',
     'ACTIVATION_URL': 'activate/?uid={uid}&token={token}',
+
+    "SOCIAL_AUTH_TOKEN_STRATEGY": "apps.authentication.social.TwoFactorTokenStrategy",
+    "SOCIAL_AUTH_ALLOWED_REDIRECT_URIS": [
+        f"{env('FRONTEND_PROTOCOL', default='http')}://{DOMAIN}/api/auth/oauth/{provider}/callback"
+        for provider in ("google-oauth2", "github")
+    ],
 
     'SERIALIZERS': {
         "user_create": "apps.authentication.serializers.UserCreateSerializer",

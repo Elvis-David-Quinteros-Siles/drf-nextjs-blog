@@ -1,7 +1,8 @@
+import parseCookies from '@/utils/cookies/parseCookies';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 type Data = {
-  name?: string;
+  name?: any;
   error?: string;
 };
 
@@ -12,12 +13,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     });
   }
 
+  const cookies = parseCookies(req.headers.cookie || '');
+  const accessToken = cookies.access;
+
+  if (!accessToken) {
+    return res.status(401).json({
+      error: 'User unauthorized to make this request',
+    });
+  }
+
   try {
-    const apiRes = await fetch(`${process.env.API_URL}/api/authentication/send_otp_login/`, {
+    const apiRes = await fetch(`${process.env.API_URL}/api/authentication/confirm_2fa/`, {
       method: 'POST',
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
+        Authorization: `JWT ${accessToken}`,
         'API-Key': `${process.env.BACKEND_API_KEY}`,
       },
       body: JSON.stringify(req.body),

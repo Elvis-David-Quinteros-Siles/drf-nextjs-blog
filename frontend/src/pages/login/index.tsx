@@ -1,27 +1,56 @@
 import Button from '@/components/Button';
 import EditEmail from '@/components/forms/EditEmail';
+import EditPassword from '@/components/forms/EditPassword';
 import EditText from '@/components/forms/EditText';
+import SocialLoginButtons from '@/components/forms/SocialLoginButtons';
 import LoadingMoon from '@/components/loaders/LoadingMoon';
 import { ToastError, ToastSuccess } from '@/components/toast/alerts';
 import Layout from '@/hocs/Layout';
 import { loadProfile, loadUser, setLoginSuccess } from '@/redux/actions/auth/actions';
-import sendOTPLogin, { SendOTPLoginProps } from '@/utils/api/auth/SendOTPLogin';
 import verifyOTPLogin, { SendVerifyOTPLoginProps } from '@/utils/api/auth/VerifyOTPLogin';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useDispatch } from 'react-redux';
 import { UnknownAction } from 'redux';
 import { ThunkDispatch } from 'redux-thunk';
 
 export default function Page() {
   const [email, setEmail] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
   const [step, setStep] = useState<number>(1);
   const [otp, setOTP] = useState<string>('');
 
   const [loading, setLoading] = useState<boolean>(false);
 
   const dispatch: ThunkDispatch<any, any, UnknownAction> = useDispatch();
+
+  const router = useRouter();
+
+  const finishLogin = async () => {
+    await dispatch(loadProfile());
+    await dispatch(loadUser());
+    await dispatch(setLoginSuccess());
+    ToastSuccess('Login successfull.');
+    router.push(typeof router.query.next === 'string' && router.query.next.startsWith('/') ? router.query.next : '/');
+  };
+
+  // Vuelta del login con Google o GitHub (/api/auth/oauth/<proveedor>/callback)
+  useEffect(() => {
+    if (!router.isReady) return;
+    const { social, otp_email: otpEmail, social_error: socialError } = router.query;
+
+    if (social) {
+      finishLogin();
+    } else if (typeof otpEmail === 'string') {
+      setEmail(otpEmail);
+      setStep(2);
+      ToastSuccess('Te enviamos un código de verificación a tu correo');
+    } else if (socialError) {
+      ToastError('No se pudo iniciar sesión con esa cuenta');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router.isReady]);
 
   const handleOnSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -32,26 +61,36 @@ export default function Page() {
       return;
     }
 
-    const sendOTPLoginData: SendOTPLoginProps = {
-      email,
-    };
-
     try {
       setLoading(true);
-      const res = await sendOTPLogin(sendOTPLoginData);
-      if (res.status === 200) {
-        setStep(2);
-      } else {
-        setEmail('');
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+
+      if (res.status !== 200) {
+        ToastError('Correo o contraseña incorrectos');
+        return;
       }
+
+      if (data.otp_required) {
+        ToastSuccess('Te enviamos un código de verificación a tu correo');
+        setStep(2);
+        return;
+      }
+
+      await finishLogin();
     } catch (err) {
       ToastError(`${err}`);
     } finally {
       setLoading(false);
     }
   };
-
-  const router = useRouter();
 
   const handleOTPSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -64,14 +103,10 @@ export default function Page() {
     try {
       setLoading(true);
       const res = await verifyOTPLogin(sendVerifyOTPLoginData);
-      if (res.status === 200) {
-        await dispatch(loadProfile());
-        await dispatch(loadUser());
-        await dispatch(setLoginSuccess());
-        ToastSuccess('Login successfull.');
-        router.push(typeof router.query.next === 'string' && router.query.next.startsWith('/') ? router.query.next : '/');
+      if (res) {
+        await finishLogin();
       } else {
-        setEmail('');
+        ToastError('Código incorrecto o caducado');
         setOTP('');
       }
     } catch (err) {
@@ -93,14 +128,20 @@ export default function Page() {
         {step === 1 && (
           <form onSubmit={handleOnSubmit} className="space-y-4">
             <EditEmail data={email} setData={setEmail} title="Correo electrónico" required />
+            <EditPassword data={password} setData={setPassword} title="Contraseña" required />
             <Button disabled={loading} hoverEffect={!loading} type="submit">
               {loading ? <LoadingMoon /> : 'Ingresar'}
             </Button>
           </form>
         )}
 
+        {step === 1 && <SocialLoginButtons />}
+
         {step === 2 && (
           <form onSubmit={handleOTPSubmit} className="space-y-4">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Introduce el código que enviamos a <span className="font-medium">{email}</span>. Caduca en 5 minutos.
+            </p>
             <EditText data={otp} setData={setOTP} title="Código de verificación" required />
             <Button disabled={loading} hoverEffect={!loading} type="submit">
               {loading ? <LoadingMoon /> : 'Ingresar'}

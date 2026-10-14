@@ -2,6 +2,7 @@ import Button from '@/components/Button';
 import EditEmail from '@/components/forms/EditEmail';
 import EditPassword from '@/components/forms/EditPassword';
 import EditText from '@/components/forms/EditText';
+import SocialLoginButtons from '@/components/forms/SocialLoginButtons';
 import LoadingMoon from '@/components/loaders/LoadingMoon';
 import { ToastError } from '@/components/toast/alerts';
 import Layout from '@/hocs/Layout';
@@ -86,6 +87,8 @@ export default function Page() {
             {loading ? <LoadingMoon /> : 'Crear cuenta'}
           </Button>
         </form>
+
+        <SocialLoginButtons />
 
         <div className="mt-8 space-y-2 border-t border-gray-100 pt-6 dark:border-dark-third">
           <p className="text-center text-sm/6 text-gray-500 dark:text-gray-400">

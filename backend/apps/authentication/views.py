@@ -5,12 +5,13 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import status
 from rest_framework import permissions
 from rest_framework_api.views import StandardAPIView
-from django.contrib.auth import get_user_model
+from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.hashers import make_password
 from django.core.files.base import ContentFile
 from django.utils.crypto import get_random_string
 from django.utils import timezone
 from django.utils.timezone import now
+from django.core.cache import cache
 from django.core.mail import send_mail
 import pyotp
 import qrcode
@@ -155,26 +156,25 @@ class DisableOTPView(StandardAPIView):
         
 
 class Set2FAView(StandardAPIView):
+    """Activa o desactiva el código por correo como segundo paso del login."""
     permission_classes = [permissions.IsAuthenticated, HasValidAPIKey]
 
     def post(self, request, *args, **kwargs):
         user = request.user
 
-        if user.qr_code is None:
-            return self.error(
-                "QR Code not found for the user."
-            )
+        enabled = request.data.get("enabled")
+        if not isinstance(enabled, bool):
+            return self.error("'enabled' must be true or false.")
 
-        boolean = bool(request.data.get("bool"))
+        # Pedir la contraseña evita que una sesión abierta cambie la seguridad de la cuenta
+        password = request.data.get("password") or ""
+        if not user.check_password(password):
+            return self.error("Incorrect password.", status=status.HTTP_403_FORBIDDEN)
 
-        if boolean:
-            user.two_factor_enabled = True
-            user.save()
-            return self.response("2FA Activated")
-        else:
-            user.two_factor_enabled = False
-            user.save()
-            return self.response("2FA Disabled")
+        user.two_factor_enabled = enabled
+        user.save(update_fields=["two_factor_enabled"])
+
+        return self.response("2FA Activated" if enabled else "2FA Disabled")
         
 
 class OTPLoginView(StandardAPIView):
@@ -210,36 +210,59 @@ class OTPLoginView(StandardAPIView):
             return self.response("User does not exist.", status=status.HTTP_404_NOT_FOUND)
         
 
-class SendOTPLoginView(StandardAPIView):
+# Código enviado por correo: válido 5 minutos y como máximo 5 intentos
+LOGIN_OTP_INTERVAL = 300
+LOGIN_OTP_MAX_ATTEMPTS = 5
+
+
+def _login_tokens(user):
+    refresh = RefreshToken.for_user(user)
+    return {"access": str(refresh.access_token), "refresh": str(refresh)}
+
+
+def _send_login_otp(user):
+    secret = pyotp.random_base32()
+    user.otp_secret = secret
+    user.otp_created_at = timezone.now()
+    user.save(update_fields=["otp_secret", "otp_created_at"])
+    cache.delete(f"login_otp_attempts:{user.pk}")
+
+    otp = pyotp.TOTP(secret, interval=LOGIN_OTP_INTERVAL).now()
+
+    # Remitente: DEFAULT_FROM_EMAIL
+    send_mail(
+        "Tu código de acceso",
+        f"Tu código para iniciar sesión es {otp}.\n\n"
+        "Caduca en 5 minutos. Si no fuiste tú, cambia tu contraseña.",
+        None,
+        [user.email],
+        fail_silently=False,
+    )
+
+
+class PasswordLoginView(StandardAPIView):
+    """
+    Login con correo y contraseña. Si el usuario tiene 2FA activado no entrega
+    tokens: envía un código al correo que se valida en verify_otp_login/.
+    """
     permission_classes = [HasValidAPIKey]
 
     def post(self, request):
-        email = request.data.get('email')
+        email = (request.data.get("email") or "").strip()
+        password = request.data.get("password") or ""
 
-        # Verificar que existe un suario con ese email y que eestaa activo
-        try:
-            user = User.objects.get(email=email, is_active=True)
-        except User.DoesNotExist:
-            return self.error("User does not exist or is not active.")
-        
-        # Generar OTP
-        secret = pyotp.random_base32()
-        user.otp_secret = secret
-        user.save()
+        if not email or not password:
+            return self.error("Email and password are required.")
 
-        totp = pyotp.TOTP(secret)
-        otp = totp.now()
+        user = authenticate(request, email=email, password=password)
+        if user is None:
+            return self.error("Invalid email or password.", status=status.HTTP_401_UNAUTHORIZED)
 
-        # Enviar correo con OTP (remitente: DEFAULT_FROM_EMAIL)
-        send_mail(
-            'Your OTP Code',
-            f'Your OTP code is {otp}',
-            None,
-            [email],
-            fail_silently=False,
-        )
+        if not user.two_factor_enabled:
+            return self.response(_login_tokens(user))
 
-        return self.response("OTP sent successfully.")
+        _send_login_otp(user)
+        return self.response({"otp_required": True})
 
 
 class VerifyOTPLoginView(StandardAPIView):
@@ -247,26 +270,31 @@ class VerifyOTPLoginView(StandardAPIView):
 
     def post(self, request):
         email = request.data.get('email')
-        otp_code = request.data.get('otp')
+        otp_code = str(request.data.get('otp') or "").strip()
 
         if not email or not otp_code:
             return self.error("Both email and OTP code are required.")
 
-        # Verificar que existe un suario con ese email y que eestaa activo
+        # Solo hay código pendiente si antes se validó la contraseña en login/
         try:
-            user = User.objects.get(email=email, is_active=True)
+            user = User.objects.get(email=email, is_active=True, otp_secret__isnull=False)
         except User.DoesNotExist:
-            return self.error("User does not exist or is not active.")
-        
-        # Generar OTP
-        totp = pyotp.TOTP(user.otp_secret)
+            return self.error("Error verifying OTP code.")
 
-        if totp.verify(otp_code):
-            # Generar tokens JWT
-            refresh = RefreshToken.for_user(user)
-            return self.response({
-                "access": str(refresh.access_token), 
-                "refresh": str(refresh)
-            })
+        attempts_key = f"login_otp_attempts:{user.pk}"
+        attempts = cache.get(attempts_key, 0) + 1
+        cache.set(attempts_key, attempts, LOGIN_OTP_INTERVAL * 2)
 
-        return self.error("Error verifying OTP code.")
+        totp = pyotp.TOTP(user.otp_secret, interval=LOGIN_OTP_INTERVAL)
+        if attempts > LOGIN_OTP_MAX_ATTEMPTS or not totp.verify(otp_code, valid_window=1):
+            if attempts >= LOGIN_OTP_MAX_ATTEMPTS:
+                user.otp_secret = None
+                user.save(update_fields=["otp_secret"])
+            return self.error("Error verifying OTP code.")
+
+        # El código es de un solo uso
+        user.otp_secret = None
+        user.save(update_fields=["otp_secret"])
+        cache.delete(attempts_key)
+
+        return self.response(_login_tokens(user))

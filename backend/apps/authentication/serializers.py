@@ -1,4 +1,6 @@
 from rest_framework import serializers
+from rest_framework.exceptions import AuthenticationFailed
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from djoser.serializers import UserCreateSerializer
 from django.contrib.auth import get_user_model
 
@@ -14,6 +16,19 @@ class UserCreateSerializer(UserCreateSerializer):
     class Meta(UserCreateSerializer.Meta):
         model = User
         fields = "__all__"
+
+
+class TwoFactorTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """
+    /auth/jwt/create/ solo entrega tokens a usuarios sin 2FA; los que lo tienen
+    activado deben pasar por /api/authentication/login/ y verificar el código.
+    """
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        if self.user.two_factor_enabled:
+            raise AuthenticationFailed("Two-factor authentication required.")
+        return data
 
 
 class UserSerializer(serializers.ModelSerializer):
